@@ -1490,6 +1490,9 @@ RecordTransactionCommit(void)
 			TransactionIdAsyncCommitTree(xid, nchildren, children, XactLastRecEnd);
 	}
 
+	// Flushing to disk here might actually slow down fast txns
+	//XLogFlush(XactLastRecEnd);
+
 	/*
 	 * If we entered a commit critical section, leave it now, and let
 	 * checkpoints proceed.
