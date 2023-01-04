@@ -601,7 +601,7 @@ log_timezone = 'America/Toronto'
 # PROCESS TITLE
 #------------------------------------------------------------------------------
 
-#cluster_name = ''			# added to process titles if nonempty
+cluster_name = 'master'			# added to process titles if nonempty
 					# (change requires restart)
 #update_process_title = on
 
