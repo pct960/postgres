@@ -1466,6 +1466,11 @@ RecordTransactionCommit(void)
 		if (markXidCommitted)
 			TransactionIdCommitTree(xid, nchildren, children);
 	}
+	else if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
+	{
+		SyncRepWaitForLSN(XactLastRecEnd, true);
+		elog(ERROR, "RO txn XactLastRecEnd value = (%d)", XactLastRecEnd);
+	}
 	else
 	{
 		/*
@@ -1491,7 +1496,7 @@ RecordTransactionCommit(void)
 	}
 
 	// Flushing to disk here might actually slow down fast txns
-	//XLogFlush(XactLastRecEnd);
+	// XLogFlush(XactLastRecEnd);
 
 	/*
 	 * If we entered a commit critical section, leave it now, and let
