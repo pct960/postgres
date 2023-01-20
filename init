@@ -1,0 +1,3 @@
+#!/bin/bash
+
+initdb -D $1 -E UNICODE --locale=C
