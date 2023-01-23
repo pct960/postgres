@@ -2500,6 +2500,35 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
 }
 
 /*
+ * Get the max LSN of the system
+ */
+XLogRecPtr
+XLogGetMaxLSN(XLogRecPtr record)
+{
+	XLogRecPtr	WriteRqstPtr;
+	XLogwrtRqst WriteRqst;
+	TimeLineID	insertTLI = XLogCtl->InsertTimeLineID;
+
+	START_CRIT_SECTION();
+
+	/* initialize to given target; may increase below */
+	WriteRqstPtr = record;
+
+	XLogRecPtr	insertpos;
+
+	/* read LogwrtResult and update local state */
+	SpinLockAcquire(&XLogCtl->info_lck);
+	if (WriteRqstPtr < XLogCtl->LogwrtRqst.Write)
+		WriteRqstPtr = XLogCtl->LogwrtRqst.Write;
+	LogwrtResult = XLogCtl->LogwrtResult;
+	SpinLockRelease(&XLogCtl->info_lck);
+
+	END_CRIT_SECTION();
+
+	return WriteRqstPtr;
+}
+
+/*
  * Ensure that all XLOG data through the given position is flushed to disk.
  *
  * NOTE: this differs from XLogWrite mainly in that the WALWriteLock is not

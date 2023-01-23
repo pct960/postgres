@@ -1468,7 +1468,8 @@ RecordTransactionCommit(void)
 	}
 	else if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 	{
-		SyncRepWaitForLSN(XactLastRecEnd, true);
+		XLogRecPtr maxLSN = XLogGetMaxLSN(NULL);
+		SyncRepWaitForLSN(maxLSN, true);
 		elog(ERROR, "RO txn XactLastRecEnd value = (%d)", XactLastRecEnd);
 	}
 	else
