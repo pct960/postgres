@@ -1355,6 +1355,12 @@ RecordTransactionCommit(void)
 		 * would.  This will primarily happen for HOT pruning and the like; we
 		 * want these to be flushed to disk in due time.
 		 */
+		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
+		{
+			XLogRecPtr maxLSN = XLogGetMaxLSN(NULL);
+			//SyncRepWaitForLSN(maxLSN, false);
+			elog(INFO, "RO txn maxLSN = (%d), XactLastRecEnd value = (%d)", maxLSN, XactLastRecEnd);
+		}
 		if (!wrote_xlog)
 			goto cleanup;
 	}
@@ -1454,6 +1460,8 @@ RecordTransactionCommit(void)
 	 * if all to-be-deleted tables are temporary though, since they are lost
 	 * anyway if we crash.)
 	 */
+	elog(FATAL, "wrote_xlog value is is (%d)", wrote_xlog);
+
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
@@ -1465,12 +1473,6 @@ RecordTransactionCommit(void)
 		 */
 		if (markXidCommitted)
 			TransactionIdCommitTree(xid, nchildren, children);
-	}
-	else if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
-	{
-		XLogRecPtr maxLSN = XLogGetMaxLSN(NULL);
-		SyncRepWaitForLSN(maxLSN, true);
-		elog(ERROR, "RO txn XactLastRecEnd value = (%d)", XactLastRecEnd);
 	}
 	else
 	{
