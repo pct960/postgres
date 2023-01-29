@@ -1460,7 +1460,7 @@ RecordTransactionCommit(void)
 	 * if all to-be-deleted tables are temporary though, since they are lost
 	 * anyway if we crash.)
 	 */
-	elog(FATAL, "wrote_xlog value is is (%d)", wrote_xlog);
+	//elog(FATAL, "wrote_xlog value is is (%d)", wrote_xlog);
 
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
