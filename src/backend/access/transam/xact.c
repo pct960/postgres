@@ -51,6 +51,8 @@
 #include "replication/snapbuild.h"
 #include "replication/syncrep.h"
 #include "replication/walsender.h"
+#include "replication/walsender.h"
+#include "replication/walsender_private.h"
 #include "storage/condition_variable.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
@@ -1358,7 +1360,7 @@ RecordTransactionCommit(void)
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
 			XLogRecPtr maxLSN = XLogGetMaxLSN(NULL);
-			//SyncRepWaitForLSN(maxLSN, false);
+			//SyncRepWaitForLSN(WalSndCtl->lsn[1] + 1, false);
 			elog(INFO, "RO txn maxLSN = (%d), XactLastRecEnd value = (%d)", maxLSN, XactLastRecEnd);
 		}
 		if (!wrote_xlog)
