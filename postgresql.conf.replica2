@@ -61,7 +61,7 @@
 					# comma-separated list of addresses;
 					# defaults to 'localhost'; use '*' for all
 					# (change requires restart)
-#port = 5432				# (change requires restart)
+port = 5434				# (change requires restart)
 max_connections = 100			# (change requires restart)
 #superuser_reserved_connections = 3	# (change requires restart)
 #unix_socket_directories = '/tmp'	# comma-separated list of directories
@@ -207,7 +207,7 @@ dynamic_shared_memory_type = posix	# the default is usually the first option
 #fsync = on				# flush data to disk for crash safety
 					# (turning this off can cause
 					# unrecoverable data corruption)
-synchronous_commit = remote_apply	# synchronization level;
+#synchronous_commit = remote_apply	# synchronization level;
 					# off, local, remote_write, remote_apply, or on
 #wal_sync_method = fsync		# the default is the first option
 					# supported by the operating system:
@@ -319,7 +319,7 @@ min_wal_size = 80MB
 
 # These settings are ignored on a standby server.
 
-synchronous_standby_names = 'FIRST 2 (replica1, replica2)'	# standby servers that provide sync rep
+#synchronous_standby_names = 'FIRST 3 (master, replica1, replica2)'	# standby servers that provide sync rep
 				# method to choose sync standbys, number of sync standbys,
 				# and comma-separated list of application_name
 				# from standby(s); '*' = all
@@ -332,7 +332,7 @@ synchronous_standby_names = 'FIRST 2 (replica1, replica2)'	# standby servers tha
 #primary_conninfo = ''			# connection string to sending server
 #primary_slot_name = ''			# replication slot on sending server
 #promote_trigger_file = ''		# file name whose presence ends recovery
-#hot_standby = on			# "off" disallows queries during recovery
+hot_standby = on			# "off" disallows queries during recovery
 					# (change requires restart)
 #max_standby_archive_delay = 30s	# max delay before canceling queries
 					# when reading WAL from archive;
@@ -441,14 +441,14 @@ synchronous_standby_names = 'FIRST 2 (replica1, replica2)'	# standby servers tha
 
 # - Where to Log -
 
-log_destination = 'stderr'		# Valid values are combinations of
+#log_destination = 'stderr'		# Valid values are combinations of
 					# stderr, csvlog, jsonlog, syslog, and
 					# eventlog, depending on platform.
 					# csvlog and jsonlog require
 					# logging_collector to be on.
 
 # This is used when logging to stderr:
-logging_collector = on			# Enable capturing of stderr, jsonlog,
+#logging_collector = off		# Enable capturing of stderr, jsonlog,
 					# and csvlog into log files. Required
 					# to be on for csvlogs and jsonlogs.
 					# (change requires restart)
@@ -456,7 +456,7 @@ logging_collector = on			# Enable capturing of stderr, jsonlog,
 # These are only used if logging_collector is on:
 #log_directory = 'log'			# directory where log files are written,
 					# can be absolute or relative to PGDATA
-log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
+#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
 					# can include strftime() escapes
 #log_file_mode = 0600			# creation mode for log files,
 					# begin with 0 to use octal notation
@@ -486,7 +486,7 @@ log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
 
 # - When to Log -
 
-log_min_messages = info			# values in order of decreasing detail:
+#log_min_messages = warning		# values in order of decreasing detail:
 					#   debug5
 					#   debug4
 					#   debug3
@@ -530,7 +530,7 @@ log_min_messages = info			# values in order of decreasing detail:
 					# 1.0 logs all such statements, 0.0 never logs
 
 
-log_transaction_sample_rate = 1.0	# fraction of transactions whose statements
+#log_transaction_sample_rate = 0.0	# fraction of transactions whose statements
 					# are logged regardless of their duration; 1.0 logs all
 					# statements from all transactions, 0.0 never logs
 
@@ -541,20 +541,20 @@ log_transaction_sample_rate = 1.0	# fraction of transactions whose statements
 
 # - What to Log -
 
-#debug_print_parse = on
-#debug_print_rewritten = on
+#debug_print_parse = off
+#debug_print_rewritten = off
 #debug_print_plan = off
-debug_pretty_print = on
+#debug_pretty_print = on
 #log_autovacuum_min_duration = 10min	# log autovacuum activity;
 					# -1 disables, 0 logs all actions and
 					# their durations, > 0 logs only
 					# actions running at least this number
 					# of milliseconds.
-log_checkpoints = on
-log_connections = on
-log_disconnections = on
-log_duration = on
-log_error_verbosity = verbose		# terse, default, or verbose messages
+#log_checkpoints = on
+#log_connections = off
+#log_disconnections = off
+#log_duration = off
+#log_error_verbosity = default		# terse, default, or verbose messages
 #log_hostname = off
 #log_line_prefix = '%m [%p] '		# special values:
 					#   %a = application name
@@ -601,7 +601,7 @@ log_timezone = 'America/Toronto'
 # PROCESS TITLE
 #------------------------------------------------------------------------------
 
-cluster_name = 'master'			# added to process titles if nonempty
+cluster_name = 'replica2'			# added to process titles if nonempty
 					# (change requires restart)
 #update_process_title = on
 
