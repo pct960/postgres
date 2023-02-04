@@ -51,7 +51,6 @@
 #include "replication/snapbuild.h"
 #include "replication/syncrep.h"
 #include "replication/walsender.h"
-#include "replication/walsender.h"
 #include "replication/walsender_private.h"
 #include "storage/condition_variable.h"
 #include "storage/fd.h"
@@ -1359,9 +1358,19 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			XLogRecPtr maxLSN = XLogGetMaxLSN(NULL);
-			//SyncRepWaitForLSN(WalSndCtl->lsn[1] + 1, false);
-			elog(INFO, "RO txn maxLSN = (%d), XactLastRecEnd value = (%d)", maxLSN, XactLastRecEnd);
+			XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
+			XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
+			if (!RecoveryInProgress())
+				RecentFlushPtr = GetFlushRecPtr(NULL);
+			else
+				RecentFlushPtr = GetXLogReplayRecPtr(NULL);
+			//XLogRecPtr SyncRepMaxLSN = SyncRepGetMAXLSN(mode);
+			//SyncRepWaitForLSN(XLogMaxLSN, false);
+			//WalSndWaitForRep(XLogMaxLSN);
+			//if(XLogMaxLSN > RecentFlushPtr)
+				SyncRepROWait(XLogMaxLSN);
+
+			elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d)", XLogMaxLSN, RecentFlushPtr);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
@@ -1468,6 +1477,8 @@ RecordTransactionCommit(void)
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
 	{
+		XLogRecPtr maxLSN = XLogGetMaxLSN(0);
+		elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
 		XLogFlush(XactLastRecEnd);
 
 		/*

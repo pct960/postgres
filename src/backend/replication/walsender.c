@@ -253,6 +253,7 @@ static void WalSndWriteData(LogicalDecodingContext *ctx, XLogRecPtr lsn, Transac
 static void WalSndUpdateProgress(LogicalDecodingContext *ctx, XLogRecPtr lsn, TransactionId xid,
 								 bool skipped_xact);
 static XLogRecPtr WalSndWaitForWal(XLogRecPtr loc);
+//static XLogRecPtr WalSndWaitForRep(XLogRecPtr loc);
 static void LagTrackerWrite(XLogRecPtr lsn, TimestampTz local_flush_time);
 static TimeOffset LagTrackerRead(int head, XLogRecPtr lsn, TimestampTz now);
 static bool TransactionIdInRecentPast(TransactionId xid, uint32 epoch);
@@ -684,6 +685,7 @@ SendTimeLineHistory(TimeLineHistoryCmd *cmd)
 static void
 StartReplication(StartReplicationCmd *cmd)
 {
+	elog(INFO, "in start replication");
 	StringInfoData buf;
 	XLogRecPtr	FlushPtr;
 	TimeLineID	FlushTLI;
@@ -801,9 +803,11 @@ StartReplication(StartReplicationCmd *cmd)
 
 	streamingDoneSending = streamingDoneReceiving = false;
 
+	elog(INFO, "before entering copy mode");
 	/* If there is nothing to stream, don't even enter COPY mode */
 	if (!sendTimeLineIsHistoric || cmd->startpoint < sendTimeLineValidUpto)
 	{
+		elog(INFO, "inside copy mode if cond");
 		/*
 		 * When we first start replication the standby will be behind the
 		 * primary. For some applications, for example synchronous
@@ -834,6 +838,7 @@ StartReplication(StartReplicationCmd *cmd)
 							LSN_FORMAT_ARGS(FlushPtr))));
 		}
 
+		elog(INFO, "started streaming");
 		/* Start streaming from the requested point */
 		sentPtr = cmd->startpoint;
 
@@ -855,6 +860,7 @@ StartReplication(StartReplicationCmd *cmd)
 		WalSndSetState(WALSNDSTATE_STARTUP);
 
 		Assert(streamingDoneSending && streamingDoneReceiving);
+		elog(INFO, "dome streaming");
 	}
 
 	if (cmd->slotname)
@@ -1424,6 +1430,7 @@ WalSndWriteData(LogicalDecodingContext *ctx, XLogRecPtr lsn, TransactionId xid,
 static void
 ProcessPendingWrites(void)
 {
+	elog(INFO, "walsend waiting for a write");
 	for (;;)
 	{
 		long		sleeptime;
@@ -1463,6 +1470,8 @@ ProcessPendingWrites(void)
 		if (pq_flush_if_writable() != 0)
 			WalSndShutdown();
 	}
+
+	elog(INFO, "walsender latch set!");
 
 	/* reactivate latch so WalSndLoop knows to continue */
 	SetLatch(MyLatch);
@@ -1566,6 +1575,7 @@ WalSndWaitForWal(XLogRecPtr loc)
 
 	for (;;)
 	{
+		elog(INFO, "in walsndwaitforwal");
 		long		sleeptime;
 
 		/* Clear any already-pending wakeups */
@@ -1662,6 +1672,8 @@ WalSndWaitForWal(XLogRecPtr loc)
 
 		if (pq_is_send_pending())
 			wakeEvents |= WL_SOCKET_WRITEABLE;
+		
+		elog(INFO, "Waiting for walsndwait");
 
 		WalSndWait(wakeEvents, sleeptime, WAIT_EVENT_WAL_SENDER_WAIT_WAL);
 	}

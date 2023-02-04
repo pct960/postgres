@@ -209,7 +209,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	MyProc->waitLSN = lsn;
 	MyProc->syncRepState = SYNC_REP_WAITING;
 	SyncRepQueueInsert(mode);
-	Assert(SyncRepQueueIsOrderedByLSN(mode));
+	//Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
 
 	/* Alter ps display to show waiting for sync rep. */
@@ -226,6 +226,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		new_status[len] = '\0'; /* truncate off " waiting ..." */
 	}
 
+	elog(INFO, "Before the wait loop in syncrep");
 	/*
 	 * Wait for specified LSN to be confirmed.
 	 *
@@ -234,6 +235,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 */
 	for (;;)
 	{
+		elog(INFO, "Waiting in wait loop in syncrep");
 		int			rc;
 
 		/* Must reset the latch before testing state. */
@@ -292,8 +294,10 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		 * Wait on latch.  Any condition that should wake us up will set the
 		 * latch, so no need for timeout.
 		 */
+		elog(INFO, "before waitlatch");
 		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1,
 					   WAIT_EVENT_SYNC_REP);
+		elog(INFO, "after waitlatch");
 
 		/*
 		 * If the postmaster dies, we'll probably never get an acknowledgment,
@@ -429,6 +433,39 @@ SyncRepInitConfig(void)
 	}
 }
 
+void SyncRepROWait(XLogRecPtr lsn)
+{
+	volatile WalSndCtlData *walsndctl = WalSndCtl;
+	XLogRecPtr	writePtr;
+	XLogRecPtr	flushPtr;
+	XLogRecPtr	applyPtr;
+	bool		got_recptr;
+	bool		am_sync;
+
+	LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
+
+	for(;;)
+	{
+		got_recptr = SyncRepGetSyncRecPtr(&writePtr, &flushPtr, &applyPtr, &am_sync);
+
+		if (walsndctl->lsn[SYNC_REP_WAIT_WRITE] < writePtr)
+			walsndctl->lsn[SYNC_REP_WAIT_WRITE] = writePtr;
+		if (walsndctl->lsn[SYNC_REP_WAIT_FLUSH] < flushPtr)
+			walsndctl->lsn[SYNC_REP_WAIT_FLUSH] = flushPtr;
+		if (walsndctl->lsn[SYNC_REP_WAIT_APPLY] < applyPtr)
+			walsndctl->lsn[SYNC_REP_WAIT_APPLY] = applyPtr;
+
+		elog(INFO, "in syncreprowait, got_recptr = (%d), lsn = (%d), flushedlsn=(%d)", got_recptr, lsn, walsndctl->lsn[SYNC_REP_WAIT_FLUSH]);
+		
+		//EDXXX: What happens at new db startup?
+		if(lsn<=walsndctl->lsn[SYNC_REP_WAIT_FLUSH] || walsndctl->lsn[SYNC_REP_WAIT_FLUSH] == 0)
+			break;
+	}
+
+	LWLockRelease(SyncRepLock);
+	return;
+}
+
 /*
  * Update the LSNs on each queue based upon our latest state. This
  * implements a simple policy of first-valid-sync-standby-releases-waiter.
@@ -532,7 +569,7 @@ SyncRepReleaseWaiters(void)
 
 	LWLockRelease(SyncRepLock);
 
-	elog(DEBUG3, "released %d procs up to write %X/%X, %d procs up to flush %X/%X, %d procs up to apply %X/%X",
+	elog(DEBUG5, "released %d procs up to write %X/%X, %d procs up to flush %X/%X, %d procs up to apply %X/%X",
 		 numwrite, LSN_FORMAT_ARGS(writePtr),
 		 numflush, LSN_FORMAT_ARGS(flushPtr),
 		 numapply, LSN_FORMAT_ARGS(applyPtr));
@@ -586,6 +623,7 @@ SyncRepGetSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
 	if (!(*am_sync) ||
 		num_standbys < SyncRepConfig->num_sync)
 	{
+		elog(INFO, "Not enough standbys, quitting");
 		pfree(sync_standbys);
 		return false;
 	}
@@ -877,6 +915,7 @@ SyncRepGetStandbyPriority(void)
 static int
 SyncRepWakeQueue(bool all, int mode)
 {
+	elog(INFO, "in syncrepwakequeue");
 	volatile WalSndCtlData *walsndctl = WalSndCtl;
 	PGPROC	   *proc = NULL;
 	PGPROC	   *thisproc = NULL;
@@ -895,6 +934,8 @@ SyncRepWakeQueue(bool all, int mode)
 		/*
 		 * Assume the queue is ordered by LSN
 		 */
+
+		elog(INFO, "In SyncRepWakeQueue. walsndctl->lsn = (%d), proc->waitlsn = (%d)", walsndctl->lsn[mode], proc->waitLSN);
 		if (!all && walsndctl->lsn[mode] < proc->waitLSN)
 			return numprocs;
 
@@ -1012,6 +1053,34 @@ SyncRepQueueIsOrderedByLSN(int mode)
 	return true;
 }
 #endif
+
+// XXX: Get max LSN of last process in the SyncRepQueue.
+// Rename this later
+static XLogRecPtr
+SyncRepGetMaxLSN(int mode)
+{
+	PGPROC	   *proc = NULL;
+	XLogRecPtr	lastLSN;
+
+	Assert(mode >= 0 && mode < NUM_SYNC_REP_WAIT_MODE);
+
+	lastLSN = 0;
+
+	proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
+								   &(WalSndCtl->SyncRepQueue[mode]),
+								   offsetof(PGPROC, syncRepLinks));
+
+	while (proc)
+	{
+		lastLSN = proc->waitLSN;
+
+		proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
+									   &(proc->syncRepLinks),
+									   offsetof(PGPROC, syncRepLinks));
+	}
+
+	return lastLSN;
+}
 
 /*
  * ===========================================================
