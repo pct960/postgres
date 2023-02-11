@@ -121,9 +121,12 @@ bool		am_db_walsender = false;	/* Connected to a database? */
 /* User-settable parameters for walsender */
 int			max_wal_senders = 0;	/* the maximum number of concurrent
 									 * walsenders */
-int			wal_sender_timeout = 60 * 1000; /* maximum time to send one WAL
+int			wal_sender_timeout = 10 * 1000; /* maximum time to send one WAL
 											 * data message */
 bool		log_replication_commands = false;
+
+bool		request_keepalive = false; /* flag for SyncRepROWait to request keepalives 
+										* so that LSNs are updated*/
 
 /*
  * State for WalSndWakeupRequest
@@ -3654,7 +3657,7 @@ pg_stat_get_wal_senders(PG_FUNCTION_ARGS)
 static void
 WalSndKeepalive(bool requestReply, XLogRecPtr writePtr)
 {
-	elog(DEBUG2, "sending replication keepalive");
+	elog(INFO, "sending replication keepalive");
 
 	/* construct the message... */
 	resetStringInfo(&output_message);
@@ -3683,11 +3686,11 @@ WalSndKeepaliveIfNecessary(void)
 	 * Don't send keepalive messages if timeouts are globally disabled or
 	 * we're doing something not partaking in timeouts.
 	 */
-	if (wal_sender_timeout <= 0 || last_reply_timestamp <= 0)
-		return;
+	//if (wal_sender_timeout <= 0 || last_reply_timestamp <= 0)
+	//	return;
 
-	if (waiting_for_ping_response)
-		return;
+	//if (waiting_for_ping_response)
+	//	return;
 
 	/*
 	 * If half of wal_sender_timeout has lapsed without receiving any reply
@@ -3696,8 +3699,9 @@ WalSndKeepaliveIfNecessary(void)
 	 */
 	ping_time = TimestampTzPlusMilliseconds(last_reply_timestamp,
 											wal_sender_timeout / 2);
-	if (last_processing >= ping_time)
+	if (last_processing >= ping_time || request_keepalive)
 	{
+		elog(INFO, "sending wakeup probably because keepalive was requested!");
 		WalSndKeepalive(true, InvalidXLogRecPtr);
 
 		/* Try to flush pending output to the client */

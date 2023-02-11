@@ -34,6 +34,7 @@ extern PGDLLIMPORT bool wake_wal_senders;
 extern PGDLLIMPORT int max_wal_senders;
 extern PGDLLIMPORT int wal_sender_timeout;
 extern PGDLLIMPORT bool log_replication_commands;
+extern PGDLLIMPORT bool request_keepalive;
 
 extern void InitWalSender(void);
 extern bool exec_replication_command(const char *query_string);
