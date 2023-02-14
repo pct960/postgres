@@ -1364,20 +1364,12 @@ RecordTransactionCommit(void)
 				RecentFlushPtr = GetFlushRecPtr(NULL);
 			else
 				RecentFlushPtr = GetXLogReplayRecPtr(NULL);
-			//XLogRecPtr SyncRepMaxLSN = SyncRepGetMAXLSN(mode);
-			//WalSndWaitForRep(XLogMaxLSN);
 			if(XLogMaxLSN > RecentFlushPtr)
 			{	
-				elog(INFO, "RO waiting for syncrepwaitforlsn"); 
 				SyncRepWaitForLSN(XLogMaxLSN, false);
 				elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
-				//SyncRepROWait(XLogMaxLSN);
-			//request_keepalive = true;
-			//SyncRepWaitForLSN(XLogMaxLSN, false);
-			//request_keepalive = false;
-
-			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d)", XLogMaxLSN, RecentFlushPtr);
+			elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
