@@ -234,7 +234,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		new_status[len] = '\0'; /* truncate off " waiting ..." */
 	}
 
-	elog(INFO, "Before the wait loop in syncrep");
+	//elog(INFO, "Before the wait loop in syncrep");
 	/*
 	 * Wait for specified LSN to be confirmed.
 	 *
@@ -243,7 +243,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 */
 	for (;;)
 	{
-		elog(INFO, "Waiting in wait loop in syncrep");
+		//elog(INFO, "Waiting in wait loop in syncrep");
 		int			rc;
 
 		/* Must reset the latch before testing state. */
@@ -302,10 +302,10 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		 * Wait on latch.  Any condition that should wake us up will set the
 		 * latch, so no need for timeout.
 		 */
-		elog(INFO, "before waitlatch");
+		//elog(INFO, "before waitlatch");
 		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1,
 					   WAIT_EVENT_SYNC_REP);
-		elog(INFO, "after waitlatch");
+		//elog(INFO, "after waitlatch");
 
 		/*
 		 * If the postmaster dies, we'll probably never get an acknowledgment,

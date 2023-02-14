@@ -1477,7 +1477,7 @@ RecordTransactionCommit(void)
 		forceSyncCommit || nrels > 0)
 	{
 		XLogRecPtr maxLSN = XLogGetMaxLSN(0);
-		elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
+		//elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
 		XLogFlush(XactLastRecEnd);
 
 		/*
