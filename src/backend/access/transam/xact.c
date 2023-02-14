@@ -1369,7 +1369,7 @@ RecordTransactionCommit(void)
 				SyncRepWaitForLSN(XLogMaxLSN, false);
 				elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
-			elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
+			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
