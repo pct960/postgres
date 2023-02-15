@@ -153,7 +153,7 @@ static bool SyncRepQueueIsOrderedByLSN(int mode);
  * remote_apply, because only commit records provide apply feedback.
  */
 void
-SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
+SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 {
 	char	   *new_status = NULL;
 	const char *old_status;
@@ -216,7 +216,19 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 */
 	MyProc->waitLSN = lsn;
 	MyProc->syncRepState = SYNC_REP_WAITING;
-	SyncRepQueueInsert(mode);
+	//PGPROC *proc; 
+	//proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
+	//							   &(WalSndCtl->SyncRepQueue[mode]),
+	//							   offsetof(PGPROC, syncRepLinks));
+
+	//if(!readOnlyWait || (readOnlyWait && proc))
+		SyncRepQueueInsert(mode);
+	//else
+	//{
+	//	LWLockRelease(SyncRepLock);
+	//	return;
+	//}
+
 	//Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
 
@@ -889,6 +901,27 @@ cmp_lsn(const void *a, const void *b)
 		return 1;
 }
 
+// Get the max "applied" LSN of the WalSnd processes
+// Currently only returns the max of the applied LSN
+// among all synchronous standbys. 
+// EDXXX: Change this to account for synchronous_commit mode
+XLogRecPtr SyncRepGetWalSndLSN()
+{
+	XLogRecPtr maxLSN = InvalidXLogRecPtr;
+	
+	for(int i =0; i < max_wal_senders; i++)
+	{
+		// EDXXX: Is initialisation and volatile necessary here?
+		volatile WalSnd *walsnd;	
+		walsnd = &WalSndCtl->walsnds[i];
+
+		if(walsnd->apply > maxLSN)
+			maxLSN = walsnd->apply;
+	}
+
+	return maxLSN;
+}
+
 /*
  * Return data about walsenders that are candidates to be sync standbys.
  *
@@ -1052,7 +1085,6 @@ SyncRepGetStandbyPriority(void)
 static int
 SyncRepWakeQueue(bool all, int mode)
 {
-	elog(INFO, "in syncrepwakequeue");
 	volatile WalSndCtlData *walsndctl = WalSndCtl;
 	PGPROC	   *proc = NULL;
 	PGPROC	   *thisproc = NULL;
@@ -1193,30 +1225,30 @@ SyncRepQueueIsOrderedByLSN(int mode)
 
 // EDXXX: Get max LSN of last process in the SyncRepQueue.
 // Rename this later
-static XLogRecPtr
-SyncRepGetMaxLSN(int mode)
+int
+SyncRepGetQueueLength(int mode)
 {
 	PGPROC	   *proc = NULL;
-	XLogRecPtr	lastLSN;
+	int			queueLength= 0;
 
-	Assert(mode >= 0 && mode < NUM_SYNC_REP_WAIT_MODE);
-
-	lastLSN = 0;
-
+	elog(INFO, "before proc");
 	proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
 								   &(WalSndCtl->SyncRepQueue[mode]),
 								   offsetof(PGPROC, syncRepLinks));
+	elog(INFO, "after proc");
 
 	while (proc)
 	{
-		lastLSN = proc->waitLSN;
-
+		elog(INFO, "inside while");
+		queueLength++;
 		proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
 									   &(proc->syncRepLinks),
 									   offsetof(PGPROC, syncRepLinks));
 	}
 
-	return lastLSN;
+	elog(INFO, "before returning queuLength");
+
+	return queueLength;
 }
 
 /*
