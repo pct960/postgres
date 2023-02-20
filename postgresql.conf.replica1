@@ -441,14 +441,14 @@ hot_standby = on			# "off" disallows queries during recovery
 
 # - Where to Log -
 
-#log_destination = 'stderr'		# Valid values are combinations of
+log_destination = 'stderr'		# Valid values are combinations of
 					# stderr, csvlog, jsonlog, syslog, and
 					# eventlog, depending on platform.
 					# csvlog and jsonlog require
 					# logging_collector to be on.
 
 # This is used when logging to stderr:
-#logging_collector = off		# Enable capturing of stderr, jsonlog,
+logging_collector = on		# Enable capturing of stderr, jsonlog,
 					# and csvlog into log files. Required
 					# to be on for csvlogs and jsonlogs.
 					# (change requires restart)
@@ -456,7 +456,7 @@ hot_standby = on			# "off" disallows queries during recovery
 # These are only used if logging_collector is on:
 #log_directory = 'log'			# directory where log files are written,
 					# can be absolute or relative to PGDATA
-#log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
 					# can include strftime() escapes
 #log_file_mode = 0600			# creation mode for log files,
 					# begin with 0 to use octal notation
@@ -486,7 +486,7 @@ hot_standby = on			# "off" disallows queries during recovery
 
 # - When to Log -
 
-#log_min_messages = warning		# values in order of decreasing detail:
+log_min_messages = info			# values in order of decreasing detail:
 					#   debug5
 					#   debug4
 					#   debug3
@@ -530,7 +530,7 @@ hot_standby = on			# "off" disallows queries during recovery
 					# 1.0 logs all such statements, 0.0 never logs
 
 
-#log_transaction_sample_rate = 0.0	# fraction of transactions whose statements
+log_transaction_sample_rate = 1.0	# fraction of transactions whose statements
 					# are logged regardless of their duration; 1.0 logs all
 					# statements from all transactions, 0.0 never logs
 
@@ -544,17 +544,17 @@ hot_standby = on			# "off" disallows queries during recovery
 #debug_print_parse = off
 #debug_print_rewritten = off
 #debug_print_plan = off
-#debug_pretty_print = on
+debug_pretty_print = on
 #log_autovacuum_min_duration = 10min	# log autovacuum activity;
 					# -1 disables, 0 logs all actions and
 					# their durations, > 0 logs only
 					# actions running at least this number
 					# of milliseconds.
 #log_checkpoints = on
-#log_connections = off
-#log_disconnections = off
-#log_duration = off
-#log_error_verbosity = default		# terse, default, or verbose messages
+log_connections = on
+log_disconnections = on
+log_duration = on
+log_error_verbosity = verbose		# terse, default, or verbose messages
 #log_hostname = off
 #log_line_prefix = '%m [%p] '		# special values:
 					#   %a = application name
