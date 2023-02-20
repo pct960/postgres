@@ -1555,7 +1555,7 @@ RecordTransactionCommit(void)
 	if (wrote_xlog && markXidCommitted)
 	{
 		SyncRepWaitForLSN(XactLastRecEnd, true);
-		elog(INFO, "Queue length = (%d)", SyncRepGetQueueLength(synchronous_commit));
+		elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
 	}
 
 	/* remember end of last commit record */
