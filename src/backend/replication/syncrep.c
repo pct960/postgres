@@ -206,6 +206,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	if (!WalSndCtl->sync_standbys_defined ||
 		lsn <= WalSndCtl->lsn[mode])
 	{
+		//elog(INFO, "early return from syncrep");
 		LWLockRelease(SyncRepLock);
 		return;
 	}
@@ -229,7 +230,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	//	return;
 	//}
 
-	//Assert(SyncRepQueueIsOrderedByLSN(mode));
+	Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
 
 	/* Alter ps display to show waiting for sync rep. */
@@ -1209,7 +1210,7 @@ SyncRepQueueIsOrderedByLSN(int mode)
 		 * Check the queue is ordered by LSN and that multiple procs don't
 		 * have matching LSNs
 		 */
-		if (proc->waitLSN <= lastLSN)
+		if (proc->waitLSN < lastLSN)
 			return false;
 
 		lastLSN = proc->waitLSN;
