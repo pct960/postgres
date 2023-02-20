@@ -1229,25 +1229,21 @@ SyncRepQueueIsOrderedByLSN(int mode)
 int
 SyncRepGetQueueLength(int mode)
 {
-	PGPROC	   *proc = NULL;
-	int			queueLength= 0;
+	PGPROC	   *proc 		= NULL;
+	int			queueLength	= 0;
+	mode 					= Min(mode, SYNC_REP_WAIT_FLUSH);
 
-	elog(INFO, "before proc");
 	proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
 								   &(WalSndCtl->SyncRepQueue[mode]),
 								   offsetof(PGPROC, syncRepLinks));
-	elog(INFO, "after proc");
 
 	while (proc)
 	{
-		elog(INFO, "inside while");
 		queueLength++;
 		proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
 									   &(proc->syncRepLinks),
 									   offsetof(PGPROC, syncRepLinks));
 	}
-
-	elog(INFO, "before returning queuLength");
 
 	return queueLength;
 }

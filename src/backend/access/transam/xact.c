@@ -1366,7 +1366,7 @@ RecordTransactionCommit(void)
 			else
 				RecentFlushPtr = GetXLogReplayRecPtr(NULL);
 
-			//LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
+			LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
 			//PGPROC *proc; 
 			//proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[synchronous_commit]),
 			//					   &(WalSndCtl->SyncRepQueue[synchronous_commit]),
@@ -1377,8 +1377,8 @@ RecordTransactionCommit(void)
 			//else
 			//	elog(INFO, "queue empty");
 
-			//elog(INFO, "Queue length = (%d)", SyncRepGetQueueLength(synchronous_commit));
-			//LWLockRelease(SyncRepLock);
+			elog(INFO, "Queue length = (%d)", SyncRepGetQueueLength(synchronous_commit));
+			LWLockRelease(SyncRepLock);
 
 			if(XLogMaxLSN > RecentFlushPtr)
 			{	
@@ -1553,7 +1553,10 @@ RecordTransactionCommit(void)
 	 * in the procarray and continue to hold locks.
 	 */
 	if (wrote_xlog && markXidCommitted)
+	{
 		SyncRepWaitForLSN(XactLastRecEnd, true);
+		elog(INFO, "Queue length = (%d)", SyncRepGetQueueLength(synchronous_commit));
+	}
 
 	/* remember end of last commit record */
 	XactLastCommitEnd = XactLastRecEnd;
