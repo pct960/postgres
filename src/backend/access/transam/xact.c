@@ -1377,7 +1377,7 @@ RecordTransactionCommit(void)
 			//else
 			//	elog(INFO, "queue empty");
 
-			elog(INFO, "Queue length = (%d)", SyncRepGetQueueLength(synchronous_commit));
+			elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
 			LWLockRelease(SyncRepLock);
 
 			if(XLogMaxLSN > RecentFlushPtr)
