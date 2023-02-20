@@ -1553,10 +1553,7 @@ RecordTransactionCommit(void)
 	 * in the procarray and continue to hold locks.
 	 */
 	if (wrote_xlog && markXidCommitted)
-	{
 		SyncRepWaitForLSN(XactLastRecEnd, true);
-		elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
-	}
 
 	/* remember end of last commit record */
 	XactLastCommitEnd = XactLastRecEnd;
