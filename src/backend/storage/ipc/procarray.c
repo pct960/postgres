@@ -3584,8 +3584,11 @@ anyActiveBackends()
 			continue;			/* do not count prepared xacts */
 		//if (proc->waitLock != NULL)
 		//	count++;
-		if (proc->lwWaiting)
+		if (!SHMQueueEmpty(&(proc->syncRepLinks)) && proc->syncRepState == 1)
+		{	
+			elog(INFO, "waitLSN = (%d), syncRepState = (%d), xid = (%d), xmin = (%d)", proc->waitLSN, proc->syncRepState, proc->xid, proc->xmin);
 			count++;
+		}
 		
 	}
 
