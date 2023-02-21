@@ -223,7 +223,12 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	//							   offsetof(PGPROC, syncRepLinks));
 
 	//if(!readOnlyWait || (readOnlyWait && proc))
-		SyncRepQueueInsert(mode);
+	SyncRepQueueInsert(mode);
+	//if(!commit)
+	//	elog(INFO, "RO Queue length = (%d)", SyncRepGetQueueLength(mode));
+	//else
+	//	elog(INFO, "Write Queue length = (%d)", SyncRepGetQueueLength(mode));
+
 	//else
 	//{
 	//	LWLockRelease(SyncRepLock);
@@ -1246,6 +1251,27 @@ SyncRepGetQueueLength(int mode)
 	}
 
 	return queueLength;
+}
+
+bool
+areBackendsWaiting()
+{
+	uint32 allProcCount = &ProcGlobal->allProcCount;
+
+	for(int i=0;i<allProcCount;i++)
+	{
+		PGPROC	   *backend = GetPGProcByNumber(i);
+
+		if(backend->pid == 0 || backend->backendId == 0)
+			continue;
+
+		elog(INFO, "waitLSN = (%d), syncRepState = (%d), xid = (%d), xmin = (%d)", backend->waitLSN, backend->syncRepState, backend->xid, backend->xmin);
+
+		if(backend->xid != InvalidXLogRecPtr && (backend->syncRepState == SYNC_REP_NOT_WAITING || backend->syncRepState == SYNC_REP_WAITING || backend->syncRepState == SYNC_REP_WAIT_COMPLETE))
+			return true;
+
+	}
+	return false;
 }
 
 /*

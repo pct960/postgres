@@ -1377,13 +1377,16 @@ RecordTransactionCommit(void)
 			//else
 			//	elog(INFO, "queue empty");
 
-			elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
+			//elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
 			LWLockRelease(SyncRepLock);
+
+			elog(INFO, "Are backends waiting outside = (%d)", anyActiveBackends()); 
 
 			if(XLogMaxLSN > RecentFlushPtr)
 			{	
+				elog(INFO, "Are backends waiting inside = (%d)", anyActiveBackends()); 
 				SyncRepWaitForLSN(XLogMaxLSN, false);
-				elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
+				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
 			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
 			//elog(INFO, "walsndctl->latch = (%d), XLogMaxLSN = (%d)", WalSndCtl->walsnds->latch, XLogMaxLSN);

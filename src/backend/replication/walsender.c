@@ -121,7 +121,7 @@ bool		am_db_walsender = false;	/* Connected to a database? */
 /* User-settable parameters for walsender */
 int			max_wal_senders = 0;	/* the maximum number of concurrent
 									 * walsenders */
-int			wal_sender_timeout = 10 * 1000; /* maximum time to send one WAL
+int			wal_sender_timeout = 60 * 1000; /* maximum time to send one WAL
 											 * data message */
 bool		log_replication_commands = false;
 
