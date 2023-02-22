@@ -206,7 +206,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	if (!WalSndCtl->sync_standbys_defined ||
 		lsn <= WalSndCtl->lsn[mode])
 	{
-		//elog(INFO, "early return from syncrep");
+		elog(INFO, "early return from syncrep");
 		LWLockRelease(SyncRepLock);
 		return;
 	}

@@ -1386,7 +1386,7 @@ RecordTransactionCommit(void)
 			{	
 				//elog(INFO, "Are backends waiting inside = (%d)", anyActiveBackends()); 
 				SyncRepWaitForLSN(XLogMaxLSN, false);
-				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
+				elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
 			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
 			//elog(INFO, "walsndctl->latch = (%d), XLogMaxLSN = (%d)", WalSndCtl->walsnds->latch, XLogMaxLSN);
