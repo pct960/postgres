@@ -1366,7 +1366,7 @@ RecordTransactionCommit(void)
 			else
 				RecentFlushPtr = GetXLogReplayRecPtr(NULL);
 
-			LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
+			//LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
 			//PGPROC *proc; 
 			//proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[synchronous_commit]),
 			//					   &(WalSndCtl->SyncRepQueue[synchronous_commit]),
@@ -1378,13 +1378,13 @@ RecordTransactionCommit(void)
 			//	elog(INFO, "queue empty");
 
 			//elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
-			LWLockRelease(SyncRepLock);
+			//LWLockRelease(SyncRepLock);
 
-			elog(INFO, "Are backends waiting outside = (%d)", anyActiveBackends()); 
+			//elog(INFO, "Are backends waiting outside = (%d)", anyActiveBackends()); 
 
 			if(XLogMaxLSN > RecentFlushPtr)
 			{	
-				elog(INFO, "Are backends waiting inside = (%d)", anyActiveBackends()); 
+				//elog(INFO, "Are backends waiting inside = (%d)", anyActiveBackends()); 
 				SyncRepWaitForLSN(XLogMaxLSN, false);
 				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
