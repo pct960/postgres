@@ -1380,13 +1380,14 @@ RecordTransactionCommit(void)
 			//elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
 			//LWLockRelease(SyncRepLock);
 
-			//elog(INFO, "Are backends waiting outside = (%d)", anyActiveBackends()); 
+			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)];
+			//elog(INFO, "once again, lsn = (%d)", remoteFlushLSN); 
+			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
 
-			if(XLogMaxLSN > RecentFlushPtr)
+			if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
 			{	
-				//elog(INFO, "Are backends waiting inside = (%d)", anyActiveBackends()); 
 				SyncRepWaitForLSN(XLogMaxLSN, false);
-				elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
+				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
 			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
 			//elog(INFO, "walsndctl->latch = (%d), XLogMaxLSN = (%d)", WalSndCtl->walsnds->latch, XLogMaxLSN);
@@ -1555,6 +1556,8 @@ RecordTransactionCommit(void)
 	 * Note that at this stage we have marked clog, but still show as running
 	 * in the procarray and continue to hold locks.
 	 */
+
+	//elog(INFO, "xid = (%d), xmin = (%d), xmax = (%d)", xid, MyProc->xmin,XidFromFullTransactionId(ShmemVariableCache->latestCompletedXid));
 	if (wrote_xlog && markXidCommitted)
 		SyncRepWaitForLSN(XactLastRecEnd, true);
 
