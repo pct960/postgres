@@ -206,7 +206,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	if (!WalSndCtl->sync_standbys_defined ||
 		lsn <= WalSndCtl->lsn[mode])
 	{
-		elog(INFO, "early return from syncrep");
+		//elog(INFO, "early return from syncrep");
 		LWLockRelease(SyncRepLock);
 		return;
 	}
@@ -261,7 +261,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	 */
 	for (;;)
 	{
-		elog(INFO, "Waiting in wait loop in syncrep");
+		//elog(INFO, "Waiting in wait loop in syncrep");
 		int			rc;
 
 		/* Must reset the latch before testing state. */
@@ -320,10 +320,10 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 		 * Wait on latch.  Any condition that should wake us up will set the
 		 * latch, so no need for timeout.
 		 */
-		elog(INFO, "before waitlatch");
+		//elog(INFO, "before waitlatch");
 		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1,
 					   WAIT_EVENT_SYNC_REP);
-		elog(INFO, "after waitlatch");
+		//elog(INFO, "after waitlatch");
 
 		/*
 		 * If the postmaster dies, we'll probably never get an acknowledgment,
