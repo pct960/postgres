@@ -1360,11 +1360,11 @@ RecordTransactionCommit(void)
 		{
 			XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
 			//XLogRecPtr walSndAppliedLSN = SyncRepGetWalSndLSN();
-			XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
-			if (!RecoveryInProgress())
-				RecentFlushPtr = GetFlushRecPtr(NULL);
-			else
-				RecentFlushPtr = GetXLogReplayRecPtr(NULL);
+			//XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
+			//if (!RecoveryInProgress())
+			//	RecentFlushPtr = GetFlushRecPtr(NULL);
+			//else
+			//	RecentFlushPtr = GetXLogReplayRecPtr(NULL);
 
 			//LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
 			//PGPROC *proc; 
@@ -1380,7 +1380,7 @@ RecordTransactionCommit(void)
 			//elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
 			//LWLockRelease(SyncRepLock);
 
-			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)];
+			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 			//elog(INFO, "once again, lsn = (%d)", remoteFlushLSN); 
 			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
 
