@@ -3546,55 +3546,6 @@ MinimumActiveBackends(int min)
 	return count >= min;
 }
 
-bool
-anyActiveBackends()
-{
-	ProcArrayStruct *arrayP = procArray;
-	int			count = 0;
-	int			index;
-
-	/*
-	 * Note: for speed, we don't acquire ProcArrayLock.  This is a little bit
-	 * bogus, but since we are only testing fields for zero or nonzero, it
-	 * should be OK.  The result is only used for heuristic purposes anyway...
-	 */
-	for (index = 0; index < arrayP->numProcs; index++)
-	{
-		int			pgprocno = arrayP->pgprocnos[index];
-		PGPROC	   *proc = &allProcs[pgprocno];
-
-		/*
-		 * Since we're not holding a lock, need to be prepared to deal with
-		 * garbage, as someone could have incremented numProcs but not yet
-		 * filled the structure.
-		 *
-		 * If someone just decremented numProcs, 'proc' could also point to a
-		 * PGPROC entry that's no longer in the array. It still points to a
-		 * PGPROC struct, though, because freed PGPROC entries just go to the
-		 * free list and are recycled. Its contents are nonsense in that case,
-		 * but that's acceptable for this function.
-		 */
-		if (pgprocno == -1)
-			continue;			/* do not count deleted entries */
-		if (proc == MyProc)
-			continue;			/* do not count myself */
-		if (proc->xid == InvalidTransactionId)
-			continue;			/* do not count if no XID assigned */
-		if (proc->pid == 0)
-			continue;			/* do not count prepared xacts */
-		//if (proc->waitLock != NULL)
-		//	count++;
-		if (!SHMQueueEmpty(&(proc->syncRepLinks)) && proc->syncRepState == 1)
-		{	
-			elog(INFO, "waitLSN = (%d), syncRepState = (%d), xid = (%d), xmin = (%d)", proc->waitLSN, proc->syncRepState, proc->xid, proc->xmin);
-			count++;
-		}
-		
-	}
-
-	return count > 0;
-}
-
 /*
  * CountDBBackends --- count backends that are using specified database
  */

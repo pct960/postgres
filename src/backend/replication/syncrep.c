@@ -660,7 +660,7 @@ SyncRepGetSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
 	 */
 	if (!(*am_sync) || num_standbys < SyncRepConfig->num_sync)
 	{
-		elog(INFO, "Not enough standbys, returning. num_standbys = (%d), num_sync = (%d)", num_standbys, SyncRepConfig->num_sync);
+		//elog(INFO, "Not enough standbys, returning. num_standbys = (%d), num_sync = (%d)", num_standbys, SyncRepConfig->num_sync);
 		pfree(sync_standbys);
 		return false;
 	}
@@ -1110,7 +1110,7 @@ SyncRepWakeQueue(bool all, int mode)
 		 * Assume the queue is ordered by LSN
 		 */
 
-		elog(INFO, "In SyncRepWakeQueue. walsndctl->lsn = (%d), proc->waitlsn = (%d)", walsndctl->lsn[mode], proc->waitLSN);
+		//elog(INFO, "In SyncRepWakeQueue. walsndctl->lsn = (%d), proc->waitlsn = (%d)", walsndctl->lsn[mode], proc->waitLSN);
 		if (!all && walsndctl->lsn[mode] < proc->waitLSN)
 			return numprocs;
 
@@ -1251,27 +1251,6 @@ SyncRepGetQueueLength(int mode)
 	}
 
 	return queueLength;
-}
-
-bool
-areBackendsWaiting()
-{
-	uint32 allProcCount = &ProcGlobal->allProcCount;
-
-	for(int i=0;i<allProcCount;i++)
-	{
-		PGPROC	   *backend = GetPGProcByNumber(i);
-
-		if(backend->pid == 0 || backend->backendId == 0)
-			continue;
-
-		elog(INFO, "waitLSN = (%d), syncRepState = (%d), xid = (%d), xmin = (%d)", backend->waitLSN, backend->syncRepState, backend->xid, backend->xmin);
-
-		if(backend->xid != InvalidXLogRecPtr && (backend->syncRepState == SYNC_REP_NOT_WAITING || backend->syncRepState == SYNC_REP_WAITING || backend->syncRepState == SYNC_REP_WAIT_COMPLETE))
-			return true;
-
-	}
-	return false;
 }
 
 /*
