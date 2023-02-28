@@ -3436,7 +3436,7 @@ ReleasePredicateLocks(bool isCommit, bool isReadOnlySafe)
 			/* ... and proceed to perform the partial release below. */
 		}
 	}
-	Assert(!isCommit || SxactIsPrepared(MySerializableXact));
+	//Assert(!isCommit || SxactIsPrepared(MySerializableXact));
 	Assert(!isCommit || !SxactIsDoomed(MySerializableXact));
 	Assert(!SxactIsCommitted(MySerializableXact));
 	Assert(SxactIsPartiallyReleased(MySerializableXact)

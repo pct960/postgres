@@ -1263,6 +1263,66 @@ AtSubStart_ResourceOwner(void)
 	CurrentResourceOwner = s->curTransactionOwner;
 }
 
+/*
+ * Helper function to look at the current active snapshot and return the 
+ * max LSN among xmin, xmax and xips
+ */
+ 
+XLogRecPtr
+getMaxLSNFromSnapshot()
+{
+	//pg_snapshot *snap;
+	TransactionId snapXmin, snapXmax, snapInflightXid;
+	XLogRecPtr maxLSN;
+	uint32		nxip,
+				i;
+	Snapshot	cur;
+	//FullTransactionId next_fxid = ReadNextFullTransactionId();
+
+	//if(!ActiveSnapshotSet())
+	//{
+	//	elog(INFO, "no active snapshot set");
+	//	return InvalidXLogRecPtr;
+	//}
+
+	//cur = GetActiveSnapshot();
+	cur = GetLatestSnapshot();
+	if (cur == NULL)
+		elog(ERROR, "no active snapshot set");
+
+	/*
+	 * Compile-time limits on the procarray (MAX_BACKENDS processes plus
+	 * MAX_BACKENDS prepared transactions) guarantee nxip won't be too large.
+	 */
+	//StaticAssertStmt(MAX_BACKENDS * 2 <= PG_SNAPSHOT_MAX_NXIP,
+	//				 "possible overflow in pg_current_snapshot()");
+
+	/* allocate */
+	nxip = cur->xcnt;
+	//snap = palloc(PG_SNAPSHOT_SIZE(nxip));
+
+	/* fill */
+	snapXmin = cur->xmin;
+	snapXmax = cur->xmax;
+	//snap->nxip = nxip;
+
+	maxLSN = Max(TransactionIdGetCommitLSN(snapXmin), TransactionIdGetCommitLSN(snapXmax));
+
+
+	for (i = 0; i < nxip; i++)
+	{
+		snapInflightXid = cur->xip[i];
+		
+		XLogRecPtr snapInFlightLSN = TransactionIdGetCommitLSN(snapInflightXid);
+		
+		if(snapInFlightLSN > maxLSN)
+			maxLSN = snapInFlightLSN;
+	}
+
+	return maxLSN;
+}
+
+
 /* ----------------------------------------------------------------
  *						CommitTransaction stuff
  * ----------------------------------------------------------------
@@ -1381,7 +1441,7 @@ RecordTransactionCommit(void)
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-			//elog(INFO, "once again, lsn = (%d)", remoteFlushLSN); 
+			elog(INFO, "lsn from snapshot = (%d)", getMaxLSNFromSnapshot()); 
 			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
 
 			if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
@@ -1530,9 +1590,6 @@ RecordTransactionCommit(void)
 		if (markXidCommitted)
 			TransactionIdAsyncCommitTree(xid, nchildren, children, XactLastRecEnd);
 	}
-
-	// Flushing to disk here might actually slow down fast txns
-	// XLogFlush(XactLastRecEnd);
 
 	/*
 	 * If we entered a commit critical section, leave it now, and let
