@@ -230,11 +230,11 @@ TransactionIdDidAbort(TransactionId transactionId)
  * are correctly marked subcommit first.
  */
 void
-TransactionIdCommitTree(TransactionId xid, int nxids, TransactionId *xids)
+TransactionIdCommitTree(TransactionId xid, int nxids, TransactionId *xids, XLogRecPtr lsn)
 {
 	TransactionIdSetTreeStatus(xid, nxids, xids,
 							   TRANSACTION_STATUS_COMMITTED,
-							   InvalidXLogRecPtr);
+							   lsn);
 }
 
 /*

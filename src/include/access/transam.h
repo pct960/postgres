@@ -273,7 +273,7 @@ extern PGDLLIMPORT VariableCache ShmemVariableCache;
  */
 extern bool TransactionIdDidCommit(TransactionId transactionId);
 extern bool TransactionIdDidAbort(TransactionId transactionId);
-extern void TransactionIdCommitTree(TransactionId xid, int nxids, TransactionId *xids);
+extern void TransactionIdCommitTree(TransactionId xid, int nxids, TransactionId *xids, XLogRecPtr lsn);
 extern void TransactionIdAsyncCommitTree(TransactionId xid, int nxids, TransactionId *xids, XLogRecPtr lsn);
 extern void TransactionIdAbortTree(TransactionId xid, int nxids, TransactionId *xids);
 extern bool TransactionIdPrecedes(TransactionId id1, TransactionId id2);

@@ -2354,7 +2354,7 @@ RecordTransactionCommitPrepared(TransactionId xid,
 	XLogFlush(recptr);
 
 	/* Mark the transaction committed in pg_xact */
-	TransactionIdCommitTree(xid, nchildren, children);
+	TransactionIdCommitTree(xid, nchildren, children, recptr);
 
 	/* Checkpoint can proceed now */
 	MyProc->delayChkptFlags &= ~DELAY_CHKPT_START;

@@ -1287,6 +1287,7 @@ getMaxLSNFromSnapshot()
 
 	//cur = GetActiveSnapshot();
 	cur = GetLatestSnapshot();
+	//cur = GetTransactionSnapshot();
 	if (cur == NULL)
 		elog(ERROR, "no active snapshot set");
 
@@ -1418,7 +1419,7 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
+			//XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
 			//XLogRecPtr walSndAppliedLSN = SyncRepGetWalSndLSN();
 			//XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
 			//if (!RecoveryInProgress())
@@ -1441,12 +1442,13 @@ RecordTransactionCommit(void)
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-			elog(INFO, "lsn from snapshot = (%d)", getMaxLSNFromSnapshot()); 
+			XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
 
-			if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+			//if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+			if((maxSnapshotLSN > remoteFlushLSN) && (maxSnapshotLSN != 0))
 			{	
-				SyncRepWaitForLSN(XLogMaxLSN, false);
+				SyncRepWaitForLSN(maxSnapshotLSN, false);
 				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
 			}
 			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
@@ -1557,7 +1559,7 @@ RecordTransactionCommit(void)
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
 	{
-		XLogRecPtr maxLSN = XLogGetMaxLSN(0);
+		//XLogRecPtr maxLSN = XLogGetMaxLSN(0);
 		//elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
 		XLogFlush(XactLastRecEnd);
 
@@ -1565,7 +1567,7 @@ RecordTransactionCommit(void)
 		 * Now we may update the CLOG, if we wrote a COMMIT record above
 		 */
 		if (markXidCommitted)
-			TransactionIdCommitTree(xid, nchildren, children);
+			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
 	}
 	else
 	{
@@ -2381,6 +2383,13 @@ CommitTransaction(void)
 	 * RecordTransactionCommit.
 	 */
 	ProcArrayEndTransaction(MyProc, latestXid);
+
+	//TransactionId xid = GetTopTransactionIdIfAny();
+	//bool		markXidCommitted = TransactionIdIsValid(xid);
+	//bool wrote_xlog = (XactLastCommitEnd != 0);
+
+	//if (wrote_xlog && markXidCommitted)
+	//	SyncRepWaitForLSN(XactLastCommitEnd, true);
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
@@ -6048,7 +6057,7 @@ xact_redo_commit(xl_xact_parsed_commit *parsed,
 		/*
 		 * Mark the transaction committed in pg_xact.
 		 */
-		TransactionIdCommitTree(xid, parsed->nsubxacts, parsed->subxacts);
+		TransactionIdCommitTree(xid, parsed->nsubxacts, parsed->subxacts, lsn);
 	}
 	else
 	{
