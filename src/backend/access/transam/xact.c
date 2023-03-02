@@ -1622,8 +1622,8 @@ RecordTransactionCommit(void)
 	 */
 
 	//elog(INFO, "xid = (%d), xmin = (%d), xmax = (%d)", xid, MyProc->xmin,XidFromFullTransactionId(ShmemVariableCache->latestCompletedXid));
-	if (wrote_xlog && markXidCommitted)
-		SyncRepWaitForLSN(XactLastRecEnd, true);
+	//if (wrote_xlog && markXidCommitted)
+	//	SyncRepWaitForLSN(XactLastRecEnd, true);
 
 	/* remember end of last commit record */
 	XactLastCommitEnd = XactLastRecEnd;
@@ -2389,12 +2389,12 @@ CommitTransaction(void)
 	 */
 	ProcArrayEndTransaction(MyProc, latestXid);
 
-	//TransactionId xid = GetTopTransactionIdIfAny();
-	//bool		markXidCommitted = TransactionIdIsValid(xid);
-	//bool wrote_xlog = (XactLastCommitEnd != 0);
+	TransactionId xid = GetTopTransactionIdIfAny();
+	bool		markXidCommitted = TransactionIdIsValid(xid);
+	bool wrote_xlog = (XactLastCommitEnd != 0);
 
-	//if (wrote_xlog && markXidCommitted)
-	//	SyncRepWaitForLSN(XactLastCommitEnd, true);
+	if (wrote_xlog && markXidCommitted)
+		SyncRepWaitForLSN(XactLastCommitEnd, true);
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
