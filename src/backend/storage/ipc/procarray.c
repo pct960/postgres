@@ -2352,6 +2352,9 @@ GetSnapshotData(Snapshot snapshot)
 			if (NormalTransactionIdPrecedes(xid, xmin))
 				xmin = xid;
 
+			//if(allProcs[arrayP->pgprocnos[pgxactoff]].syncRepState == 1)
+			//	continue;
+
 			/* Add XID to snapshot. */
 			xip[count++] = xid;
 

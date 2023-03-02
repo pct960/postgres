@@ -1286,8 +1286,8 @@ getMaxLSNFromSnapshot()
 	//}
 
 	//cur = GetActiveSnapshot();
-	cur = GetLatestSnapshot();
-	//cur = GetTransactionSnapshot();
+	//cur = GetLatestSnapshot();
+	cur = GetTransactionSnapshot();
 	if (cur == NULL)
 		elog(ERROR, "no active snapshot set");
 
@@ -1447,7 +1447,8 @@ RecordTransactionCommit(void)
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-			XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
+			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
+			XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN((MyProc->xmin) - 1);
 			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
 
 			//if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
@@ -2387,6 +2388,7 @@ CommitTransaction(void)
 	 * must be done _before_ releasing locks we hold and _after_
 	 * RecordTransactionCommit.
 	 */
+
 	ProcArrayEndTransaction(MyProc, latestXid);
 
 	TransactionId xid = GetTopTransactionIdIfAny();
@@ -2395,6 +2397,7 @@ CommitTransaction(void)
 
 	if (wrote_xlog && markXidCommitted)
 		SyncRepWaitForLSN(XactLastCommitEnd, true);
+
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
