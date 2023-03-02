@@ -135,6 +135,8 @@ static TransactionId *ParallelCurrentXids;
  */
 int			MyXactFlags;
 
+XLogRecPtr maxLSN = InvalidXLogRecPtr;
+
 /*
  *	transaction states - transaction state from server perspective
  */
@@ -1268,65 +1270,65 @@ AtSubStart_ResourceOwner(void)
  * max LSN among xmin, xmax and xips
  */
  
-XLogRecPtr
-getMaxLSNFromSnapshot()
-{
-	//pg_snapshot *snap;
-	TransactionId snapXmin, snapXmax, snapInflightXid;
-	XLogRecPtr maxLSN;
-	uint32		nxip,
-				i;
-	Snapshot	cur;
-	//FullTransactionId next_fxid = ReadNextFullTransactionId();
-
-	//if(!ActiveSnapshotSet())
-	//{
-	//	elog(INFO, "no active snapshot set");
-	//	return InvalidXLogRecPtr;
-	//}
-
-	//cur = GetActiveSnapshot();
-	//cur = GetLatestSnapshot();
-	cur = GetTransactionSnapshot();
-	if (cur == NULL)
-		elog(ERROR, "no active snapshot set");
-
-	/*
-	 * Compile-time limits on the procarray (MAX_BACKENDS processes plus
-	 * MAX_BACKENDS prepared transactions) guarantee nxip won't be too large.
-	 */
-	//StaticAssertStmt(MAX_BACKENDS * 2 <= PG_SNAPSHOT_MAX_NXIP,
-	//				 "possible overflow in pg_current_snapshot()");
-
-	/* allocate */
-	nxip = cur->xcnt;
-	//snap = palloc(PG_SNAPSHOT_SIZE(nxip));
-
-	/* fill */
-	snapXmin = cur->xmin;
-	snapXmax = cur->xmax;
-
-	// An xid >= xmax is in-progress. So, we don't want to unnecessarily wait
-	// in this case
-	if(snapXmin == snapXmax)
-		return 0;
-	//snap->nxip = nxip;
-
-	maxLSN = Max(TransactionIdGetCommitLSN(snapXmin), TransactionIdGetCommitLSN(snapXmax));
-
-
-	for (i = 0; i < nxip; i++)
-	{
-		snapInflightXid = cur->xip[i];
-		
-		XLogRecPtr snapInFlightLSN = TransactionIdGetCommitLSN(snapInflightXid);
-		
-		if(snapInFlightLSN > maxLSN)
-			maxLSN = snapInFlightLSN;
-	}
-
-	return maxLSN;
-}
+//XLogRecPtr
+//getMaxLSNFromSnapshot()
+//{
+//	//pg_snapshot *snap;
+//	TransactionId snapXmin, snapXmax, snapInflightXid;
+//	XLogRecPtr maxLSN;
+//	uint32		nxip,
+//				i;
+//	Snapshot	cur;
+//	//FullTransactionId next_fxid = ReadNextFullTransactionId();
+//
+//	//if(!ActiveSnapshotSet())
+//	//{
+//	//	elog(INFO, "no active snapshot set");
+//	//	return InvalidXLogRecPtr;
+//	//}
+//
+//	//cur = GetActiveSnapshot();
+//	//cur = GetLatestSnapshot();
+//	cur = GetTransactionSnapshot();
+//	if (cur == NULL)
+//		elog(ERROR, "no active snapshot set");
+//
+//	/*
+//	 * Compile-time limits on the procarray (MAX_BACKENDS processes plus
+//	 * MAX_BACKENDS prepared transactions) guarantee nxip won't be too large.
+//	 */
+//	//StaticAssertStmt(MAX_BACKENDS * 2 <= PG_SNAPSHOT_MAX_NXIP,
+//	//				 "possible overflow in pg_current_snapshot()");
+//
+//	/* allocate */
+//	nxip = cur->xcnt;
+//	//snap = palloc(PG_SNAPSHOT_SIZE(nxip));
+//
+//	/* fill */
+//	snapXmin = cur->xmin;
+//	snapXmax = cur->xmax;
+//
+//	// An xid >= xmax is in-progress. So, we don't want to unnecessarily wait
+//	// in this case
+//	if(snapXmin == snapXmax)
+//		return 0;
+//	//snap->nxip = nxip;
+//
+//	maxLSN = Max(TransactionIdGetCommitLSN(snapXmin), TransactionIdGetCommitLSN(snapXmax));
+//
+//
+//	for (i = 0; i < nxip; i++)
+//	{
+//		snapInflightXid = cur->xip[i];
+//		
+//		XLogRecPtr snapInFlightLSN = TransactionIdGetCommitLSN(snapInflightXid);
+//		
+//		if(snapInFlightLSN > maxLSN)
+//			maxLSN = snapInFlightLSN;
+//	}
+//
+//	return maxLSN;
+//}
 
 
 /* ----------------------------------------------------------------
@@ -1448,17 +1450,10 @@ RecordTransactionCommit(void)
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
-			XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
-			//elog(INFO, "maxlsn = (%d), remotelsn = (%d)", XLogMaxLSN, remoteFlushLSN); 
+			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			//if((XLogMaxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
-			if((maxSnapshotLSN > remoteFlushLSN) && (maxSnapshotLSN != 0))
-			{	
-				SyncRepWaitForLSN(maxSnapshotLSN, false);
-				//elog(INFO, "RO finished waiting for syncrepwaitforlsn!"); 
-			}
-			//elog(INFO, "RO txn maxLSN = (%d), RecntFlushPtr value = (%d), XactMaxLSN = (%d)", XLogMaxLSN, RecentFlushPtr, XactMaxLSN);
-			//elog(INFO, "walsndctl->latch = (%d), XLogMaxLSN = (%d)", WalSndCtl->walsnds->latch, XLogMaxLSN);
+			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+				SyncRepWaitForLSN(maxLSN, false);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
@@ -2094,6 +2089,9 @@ StartTransaction(void)
 {
 	TransactionState s;
 	VirtualTransactionId vxid;
+
+	maxLSN = XLogGetMaxLSN(NULL);
+	//elog(INFO, "maxlsn init");
 
 	/*
 	 * Let's just make sure the state stack is empty
