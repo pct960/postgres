@@ -1305,6 +1305,11 @@ getMaxLSNFromSnapshot()
 	/* fill */
 	snapXmin = cur->xmin;
 	snapXmax = cur->xmax;
+
+	// An xid >= xmax is in-progress. So, we don't want to unnecessarily wait
+	// in this case
+	if(snapXmin == snapXmax)
+		return 0;
 	//snap->nxip = nxip;
 
 	maxLSN = Max(TransactionIdGetCommitLSN(snapXmin), TransactionIdGetCommitLSN(snapXmax));
