@@ -479,7 +479,7 @@ void SyncRepROWait(XLogRecPtr lsn)
 	{
 		request_keepalive = true;
 
-		elog(INFO, "in syncreprowait before, lsn = (%d), flushedlsn=(%d)", lsn, walsndctl->lsn[SYNC_REP_WAIT_FLUSH]);
+		//elog(INFO, "in syncreprowait before, lsn = (%d), flushedlsn=(%d)", lsn, walsndctl->lsn[SYNC_REP_WAIT_FLUSH]);
 
 		SyncRepGetLatestSyncRecPtr(&writePtr, &flushPtr, &applyPtr);
 
@@ -490,13 +490,13 @@ void SyncRepROWait(XLogRecPtr lsn)
 		if (walsndctl->lsn[SYNC_REP_WAIT_APPLY] < applyPtr)
 			walsndctl->lsn[SYNC_REP_WAIT_APPLY] = applyPtr;
 
-		elog(INFO, "in syncreprowait after, lsn = (%d), flushedlsn=(%d)", lsn, walsndctl->lsn[SYNC_REP_WAIT_FLUSH]);
+		//elog(INFO, "in syncreprowait after, lsn = (%d), flushedlsn=(%d)", lsn, walsndctl->lsn[SYNC_REP_WAIT_FLUSH]);
 		
 		//EDXXX: What happens at new db startup?
 		if(lsn<=walsndctl->lsn[SYNC_REP_WAIT_FLUSH] || walsndctl->lsn[SYNC_REP_WAIT_FLUSH] == 0)
 			break;
 
-		elog(INFO, "Actually waiting for lsn flush on standby");
+		//elog(INFO, "Actually waiting for lsn flush on standby");
 	}
 
 	LWLockRelease(SyncRepLock);
