@@ -1427,7 +1427,7 @@ RecordTransactionCommit(void)
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
 			//XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
-			maxLSN = XLogGetMaxLSN(NULL);
+			//maxLSN = XLogGetMaxLSN(NULL);
 			//XLogRecPtr walSndAppliedLSN = SyncRepGetWalSndLSN();
 			//XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
 			//if (!RecoveryInProgress())
@@ -1446,14 +1446,17 @@ RecordTransactionCommit(void)
 			//else
 			//	elog(INFO, "queue empty");
 
-			//elog(INFO, "Queue empty? = (%d)", SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_FLUSH)])));
+			bool queueEmpty = SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)]));
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+			//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
+
+			//if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+			if((maxLSN > remoteFlushLSN) && !queueEmpty)
 				SyncRepWaitForLSN(maxLSN, false);
 		}
 		if (!wrote_xlog)
@@ -2091,7 +2094,7 @@ StartTransaction(void)
 	TransactionState s;
 	VirtualTransactionId vxid;
 
-	//maxLSN = XLogGetMaxLSN(NULL);
+	maxLSN = XLogGetMaxLSN(NULL);
 	//elog(INFO, "maxlsn init");
 
 	/*
