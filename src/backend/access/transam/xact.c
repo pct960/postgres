@@ -1427,6 +1427,7 @@ RecordTransactionCommit(void)
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
 			//XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
+			maxLSN = XLogGetMaxLSN(NULL);
 			//XLogRecPtr walSndAppliedLSN = SyncRepGetWalSndLSN();
 			//XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
 			//if (!RecoveryInProgress())
@@ -2090,7 +2091,7 @@ StartTransaction(void)
 	TransactionState s;
 	VirtualTransactionId vxid;
 
-	maxLSN = XLogGetMaxLSN(NULL);
+	//maxLSN = XLogGetMaxLSN(NULL);
 	//elog(INFO, "maxlsn init");
 
 	/*
