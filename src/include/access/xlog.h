@@ -199,6 +199,7 @@ extern XLogRecPtr XLogInsertRecord(struct XLogRecData *rdata,
 								   bool topxid_included);
 extern void XLogFlush(XLogRecPtr RecPtr);
 extern XLogRecPtr XLogGetMaxLSN(XLogRecPtr RecPtr);
+extern XLogRecPtr XLogGetMaxAsyncLSN(XLogRecPtr RecPtr);
 extern bool XLogBackgroundFlush(void);
 extern bool XLogNeedsFlush(XLogRecPtr RecPtr);
 extern int	XLogFileInit(XLogSegNo segno, TimeLineID tli);

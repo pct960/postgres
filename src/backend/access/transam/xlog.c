@@ -2528,6 +2528,28 @@ XLogGetMaxLSN(XLogRecPtr record)
 	return WriteRqstPtr;
 }
 
+XLogRecPtr
+XLogGetMaxAsyncLSN(XLogRecPtr record)
+{
+	XLogRecPtr	WriteRqstPtr;
+
+	START_CRIT_SECTION();
+
+	/* initialize to given target; may increase below */
+	WriteRqstPtr = record;
+
+
+	/* read LogwrtResult and update local state */
+	SpinLockAcquire(&XLogCtl->info_lck);
+	if (WriteRqstPtr < XLogCtl->asyncXactLSN)
+		WriteRqstPtr = XLogCtl->asyncXactLSN;
+	SpinLockRelease(&XLogCtl->info_lck);
+
+	END_CRIT_SECTION();
+
+	return WriteRqstPtr;
+}
+
 /*
  * Ensure that all XLOG data through the given position is flushed to disk.
  *

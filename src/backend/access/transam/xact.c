@@ -1453,7 +1453,7 @@ RecordTransactionCommit(void)
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
+			elog(INFO, "maxLSN = (%d), async lsn = (%d), remoteflushlsn = (%d)", maxLSN, XLogGetMaxAsyncLSN(0), remoteFlushLSN);
 
 			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
 				//if((maxLSN > remoteFlushLSN) && !queueEmpty)
