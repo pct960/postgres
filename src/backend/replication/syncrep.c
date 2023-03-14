@@ -153,7 +153,7 @@ static bool SyncRepQueueIsOrderedByLSN(int mode);
  * remote_apply, because only commit records provide apply feedback.
  */
 void
-SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
+SyncRepWaitForLSN(XLogRecPtr lsn, TransactionId xid, bool prepared, bool commit)
 {
 	char	   *new_status = NULL;
 	const char *old_status;
@@ -181,7 +181,14 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	 */
 	if (!SyncRepRequested() ||
 		!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
-		return;
+		{
+			if(!prepared)
+			{
+				ProcArrayEndTransaction(MyProc, xid);
+				FinishCommitProcessing(xid);
+			}
+			return;
+		}
 
 	/* Cap the level for anything other than commit to remote flush only. */
 	if (commit)
@@ -208,6 +215,11 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	{
 		//elog(INFO, "early return from syncrep");
 		LWLockRelease(SyncRepLock);
+		if(!prepared)
+		{
+			ProcArrayEndTransaction(MyProc, xid);
+			FinishCommitProcessing(xid);
+		}
 		return;
 	}
 
@@ -237,6 +249,10 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 
 	Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
+	
+	// Make the transaction visible after inserting into syncrep queue
+	if(!prepared)
+		ProcArrayEndTransaction(MyProc, xid);
 
 	/* Alter ps display to show waiting for sync rep. */
 	if (update_process_title)
@@ -357,6 +373,13 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 		set_ps_display(new_status);
 		pfree(new_status);
 	}
+
+	// Now that the proc has been woken up by the walsender, 
+	// finish commit processing
+	if (!prepared)
+		FinishCommitProcessing(xid);
+
+	return;
 }
 
 /*

@@ -1456,8 +1456,8 @@ RecordTransactionCommit(void)
 			//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
 			//if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
-			if((maxLSN > remoteFlushLSN) && !queueEmpty)
-				SyncRepWaitForLSN(maxLSN, false);
+			if((maxLSN >= remoteFlushLSN) && !queueEmpty)
+				SyncRepWaitForLSN(maxLSN, InvalidTransactionId, false /*prepared?*/, false /*commit?*/);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
@@ -2106,7 +2106,8 @@ StartTransaction(void)
 	Assert(!FullTransactionIdIsValid(XactTopFullTransactionId));
 
 	/* check the current transaction state */
-	Assert(s->state == TRANS_DEFAULT);
+	elog(INFO, "transaction state = (%d)", s->state);
+	//Assert(s->state == TRANS_DEFAULT);
 
 	/*
 	 * Set the current transaction state information appropriately during
@@ -2391,16 +2392,32 @@ CommitTransaction(void)
 	 * RecordTransactionCommit.
 	 */
 
-	ProcArrayEndTransaction(MyProc, latestXid);
+	//ProcArrayEndTransaction(MyProc, latestXid);
 
 	TransactionId xid = GetTopTransactionIdIfAny();
 	bool		markXidCommitted = TransactionIdIsValid(xid);
 	bool wrote_xlog = (XactLastCommitEnd != 0);
 
 	if (wrote_xlog && markXidCommitted)
-		SyncRepWaitForLSN(XactLastCommitEnd, true);
+		SyncRepWaitForLSN(XactLastCommitEnd, latestXid, false /*prepared?*/, true /*commit?*/);
+	else if(!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
+	{
+		// Safe read-only case
+		return;
+	}
+	else
+	{
+		ProcArrayEndTransaction(MyProc, xid);
+		FinishCommitProcessing(latestXid);
+	}
 
+}
 
+void
+FinishCommitProcessing(TransactionId xid)
+{
+	TransactionState s = CurrentTransactionState;
+	bool		is_parallel_worker  = (s->blockState == TBLOCK_PARALLEL_INPROGRESS);
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
 	 * it's too late to abort the transaction.  This should be just
