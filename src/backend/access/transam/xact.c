@@ -1453,7 +1453,7 @@ RecordTransactionCommit(void)
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
+			//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
 			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
 			//if((maxLSN > remoteFlushLSN) && !queueEmpty)
@@ -1559,9 +1559,9 @@ RecordTransactionCommit(void)
 	 * anyway if we crash.)
 	 */
 
-	XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
+	//XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 
-	elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
+	//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
