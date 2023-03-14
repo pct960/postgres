@@ -1453,10 +1453,10 @@ RecordTransactionCommit(void)
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
+			elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
-			//if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
-			if((maxLSN > remoteFlushLSN) && !queueEmpty)
+			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
+			//if((maxLSN > remoteFlushLSN) && !queueEmpty)
 				SyncRepWaitForLSN(maxLSN, false);
 		}
 		if (!wrote_xlog)
@@ -1558,7 +1558,10 @@ RecordTransactionCommit(void)
 	 * if all to-be-deleted tables are temporary though, since they are lost
 	 * anyway if we crash.)
 	 */
-	//elog(FATAL, "wrote_xlog value is is (%d)", wrote_xlog);
+
+	XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
+
+	elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
