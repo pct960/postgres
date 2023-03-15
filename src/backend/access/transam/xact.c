@@ -1446,17 +1446,17 @@ RecordTransactionCommit(void)
 			//else
 			//	elog(INFO, "queue empty");
 
-			bool queueEmpty = SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)]));
+			//bool queueEmpty = SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)]));
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
+			//XLogRecPtr minSentLSN = getMinSentLSN();
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			elog(INFO, "maxLSN = (%d), async lsn = (%d), remoteflushlsn = (%d)", maxLSN, XLogGetMaxAsyncLSN(0), remoteFlushLSN);
+			elog(INFO, "maxLSN = (%d), last_important_ptr = (%d), remoteflushlsn = (%d)", maxLSN, GetLastImportantRecPtr(), remoteFlushLSN);
 
-			if((maxLSN > remoteFlushLSN) && (remoteFlushLSN != 0))
-				//if((maxLSN > remoteFlushLSN) && !queueEmpty)
+			if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
 				SyncRepWaitForLSN(maxLSN, false);
 		}
 		if (!wrote_xlog)
