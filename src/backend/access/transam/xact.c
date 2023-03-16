@@ -1450,11 +1450,11 @@ RecordTransactionCommit(void)
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-			//XLogRecPtr minSentLSN = getMinSentLSN();
+			XLogRecPtr minSentLSN = getMinSentLSN();
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			elog(INFO, "maxLSN = (%d), last_important_ptr = (%d), remoteflushlsn = (%d)", maxLSN, GetLastImportantRecPtr(), remoteFlushLSN);
+			elog(INFO, "insert_rec_ptr = (%d), last_important_ptr = (%d)", GetInsertRecPtr(), GetLastImportantRecPtr());
 
 			if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
 				SyncRepWaitForLSN(maxLSN, false);

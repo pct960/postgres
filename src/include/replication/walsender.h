@@ -13,6 +13,7 @@
 #define _WALSENDER_H
 
 #include <signal.h>
+#include "replication/syncrep.h"
 
 /*
  * What to do with a snapshot in create replication slot command.
@@ -48,6 +49,7 @@ extern void WalSndInitStopping(void);
 extern void WalSndWaitStopping(void);
 extern void HandleWalSndInitStopping(void);
 extern void WalSndRqstFileReload(void);
+extern XLogRecPtr getMinSentLSN();
 
 /*
  * Remember that we want to wakeup walsenders later
