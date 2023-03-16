@@ -57,7 +57,7 @@
 
 # - Connection Settings -
 
-#listen_addresses = 'localhost'		# what IP address(es) to listen on;
+listen_addresses = '0.0.0.0'		# what IP address(es) to listen on;
 					# comma-separated list of addresses;
 					# defaults to 'localhost'; use '*' for all
 					# (change requires restart)
@@ -448,7 +448,7 @@ log_destination = 'stderr'		# Valid values are combinations of
 					# logging_collector to be on.
 
 # This is used when logging to stderr:
-#logging_collector = on			# Enable capturing of stderr, jsonlog,
+logging_collector = on			# Enable capturing of stderr, jsonlog,
 					# and csvlog into log files. Required
 					# to be on for csvlogs and jsonlogs.
 					# (change requires restart)
@@ -486,7 +486,7 @@ log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'	# log file name pattern,
 
 # - When to Log -
 
-log_min_messages = error		# values in order of decreasing detail:
+log_min_messages = info			# values in order of decreasing detail:
 					#   debug5
 					#   debug4
 					#   debug3
