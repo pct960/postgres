@@ -3489,10 +3489,6 @@ getMinSentLSN()
 	SyncRepStandbyData *sync_standbys;
 	int			num_standbys;
 	int			i;
-	XLogRecPtr	minSent, maxSent = -1;
-	XLogRecPtr	minWrite, maxWrite = -1;
-	XLogRecPtr	minFlush, maxFlush = -1;
-	XLogRecPtr	minApply, maxApply = -1;
 
 	/*
 	 * Get the currently active synchronous standbys.  This could be out of
@@ -3523,40 +3519,11 @@ getMinSentLSN()
 		flush = walsnd->flush;
 		apply = walsnd->apply;
 		SpinLockRelease(&walsnd->mutex);
-
-		if(i == 0)
-		{
-			minSent = sentPtr;
-			minWrite = write;
-			minFlush = flush;
-			minApply= apply;
-		}
-		else
-		{
-			if(sentPtr < minSent)
-				minSent = sentPtr;
-			if(write < minWrite)
-				minWrite = write;	
-			if(flush < minFlush)
-				minFlush = flush;
-			if(apply < minApply)
-				minApply = apply;
-		}
-
-		if(sentPtr > maxSent)
-			maxSent = sentPtr;
-		if(write > maxWrite)
-			maxWrite = write;	
-		if(flush > maxFlush)
-			maxFlush = flush;
-		if(apply > maxApply)
-			maxApply = apply;
 	
-	elog(INFO, "walsender #(%d), sentPtr = (%d), flush = (%d)", i, sentPtr, flush);
+		elog(INFO, "walsender #(%d), sentPtr = (%d), flush = (%d)", i, sentPtr, flush);
 	}
 
-
-	return minSent;
+	return InvalidXLogRecPtr;
 }
 
 /*

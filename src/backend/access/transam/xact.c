@@ -1450,12 +1450,25 @@ RecordTransactionCommit(void)
 			//LWLockRelease(SyncRepLock);
 
 			XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-			XLogRecPtr minSentLSN = getMinSentLSN();
+			//XLogRecPtr minSentLSN = getMinSentLSN();
 			//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 			//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
 
-			elog(INFO, "insert_rec_ptr = (%d), last_important_ptr = (%d)", GetInsertRecPtr(), GetLastImportantRecPtr());
+			//elog(INFO, "insert_rec_ptr = (%d), last_important_ptr = (%d)", GetInsertRecPtr(), GetLastImportantRecPtr());
 
+			// EDXXX: If remoteflushlsn = 0, then a read only transaction may not be able to decide if it has to add itself
+			// to the queue. Why? a write txn may have finished committing and becoming visible, but may not have enqueued itself
+			// in the syncrep queue. 
+
+			// To solve this issue. Here is a potential strategy that might work
+			// 1. 	Refer to pgstatfuncs.c to scan running backends.
+			// 		if a backend is running and has an xid, then it is a RW txn - so it's safe for the RO txn to add itself
+			// 		to the queue irrespective of which sync level it is waiting for (syncrepwakequeue will wake up all procs in all queues)
+			// 2.	If a backend is running and does not have an xid, then check its wait_event to see if it is in 'SyncRepWait' mode.
+			//		if yes, then it is safe for the RO txn to add itself to the queue.
+
+			// EDXXX: The next todo is to only wait for the highest commit lsn we have seen, and not for the 
+			// the highest lsn in the xlog. Yet to think of a correct way of doing this.
 			if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
 				SyncRepWaitForLSN(maxLSN, false);
 		}
@@ -2097,7 +2110,8 @@ StartTransaction(void)
 	TransactionState s;
 	VirtualTransactionId vxid;
 
-	maxLSN = XLogGetMaxLSN(NULL);
+	//maxLSN = XLogGetMaxLSN(NULL);
+	maxLSN = GetInsertRecPtr();
 	//elog(INFO, "maxlsn init");
 
 	/*
