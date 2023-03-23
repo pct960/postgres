@@ -125,10 +125,6 @@ int			wal_sender_timeout = 60 * 1000; /* maximum time to send one WAL
 											 * data message */
 bool		log_replication_commands = false;
 
-// EDXXX: Get rid of this
-bool		request_keepalive = false; /* flag for SyncRepROWait to request keepalives 
-										* so that LSNs are updated*/
-
 /*
  * State for WalSndWakeupRequest
  */
@@ -3480,53 +3476,6 @@ offset_to_interval(TimeOffset offset)
 }
 
 /*
- * Returns lsn info of walsenders, including pids and xlog locations sent to
- * standby servers.
- */
-XLogRecPtr 
-getMinSentLSN()
-{
-	SyncRepStandbyData *sync_standbys;
-	int			num_standbys;
-	int			i;
-
-	/*
-	 * Get the currently active synchronous standbys.  This could be out of
-	 * date before we're done, but we'll use the data anyway.
-	 */
-	num_standbys = SyncRepGetCandidateStandbys(&sync_standbys);
-
-	for (i = 0; i < max_wal_senders; i++)
-	{
-		WalSnd	   *walsnd = &WalSndCtl->walsnds[i];
-		XLogRecPtr	sentPtr;
-		XLogRecPtr	write;
-		XLogRecPtr	flush;
-		XLogRecPtr	apply;
-		WalSndState state;
-		int			j;
-
-		SpinLockAcquire(&walsnd->mutex);
-		if (walsnd->pid == 0)
-		{
-			SpinLockRelease(&walsnd->mutex);
-			continue;
-		}
-
-		sentPtr = walsnd->sentPtr;
-		state = walsnd->state;
-		write = walsnd->write;
-		flush = walsnd->flush;
-		apply = walsnd->apply;
-		SpinLockRelease(&walsnd->mutex);
-	
-		elog(INFO, "walsender #(%d), sentPtr = (%d), flush = (%d)", i, sentPtr, flush);
-	}
-
-	return InvalidXLogRecPtr;
-}
-
-/*
  * Returns activity of walsenders, including pids and xlog locations sent to
  * standby servers.
  */
@@ -3747,7 +3696,7 @@ WalSndKeepaliveIfNecessary(void)
 	 */
 	ping_time = TimestampTzPlusMilliseconds(last_reply_timestamp,
 											wal_sender_timeout / 2);
-	if (last_processing >= ping_time || request_keepalive)
+	if (last_processing >= ping_time)
 	{
 		//elog(INFO, "sending wakeup probably because keepalive was requested!");
 		WalSndKeepalive(true, InvalidXLogRecPtr);

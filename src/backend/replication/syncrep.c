@@ -907,27 +907,6 @@ cmp_lsn(const void *a, const void *b)
 		return 1;
 }
 
-// Get the max "applied" LSN of the WalSnd processes
-// Currently only returns the max of the applied LSN
-// among all synchronous standbys. 
-// EDXXX: Change this to account for synchronous_commit mode
-XLogRecPtr SyncRepGetWalSndLSN()
-{
-	XLogRecPtr maxLSN = InvalidXLogRecPtr;
-	
-	for(int i =0; i < max_wal_senders; i++)
-	{
-		// EDXXX: Is initialisation and volatile necessary here?
-		volatile WalSnd *walsnd;	
-		walsnd = &WalSndCtl->walsnds[i];
-
-		if(walsnd->apply > maxLSN)
-			maxLSN = walsnd->apply;
-	}
-
-	return maxLSN;
-}
-
 /*
  * Return data about walsenders that are candidates to be sync standbys.
  *
@@ -1228,30 +1207,6 @@ SyncRepQueueIsOrderedByLSN(int mode)
 	return true;
 }
 #endif
-
-// EDXXX: Get max LSN of last process in the SyncRepQueue.
-// Rename this later
-int
-SyncRepGetQueueLength(int mode)
-{
-	PGPROC	   *proc 		= NULL;
-	int			queueLength	= 0;
-	mode 					= Min(mode, SYNC_REP_WAIT_FLUSH);
-
-	proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
-								   &(WalSndCtl->SyncRepQueue[mode]),
-								   offsetof(PGPROC, syncRepLinks));
-
-	while (proc)
-	{
-		queueLength++;
-		proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
-									   &(proc->syncRepLinks),
-									   offsetof(PGPROC, syncRepLinks));
-	}
-
-	return queueLength;
-}
 
 /*
  * ===========================================================
