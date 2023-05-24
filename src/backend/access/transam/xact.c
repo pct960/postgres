@@ -1587,7 +1587,7 @@ RecordTransactionCommit(void)
 	{
 		//XLogRecPtr maxLSN = XLogGetMaxLSN(0);
 		//elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
-		XLogFlush(XactLastRecEnd);
+		//XLogFlush(XactLastRecEnd);
 
 		/*
 		 * Now we may update the CLOG, if we wrote a COMMIT record above
@@ -1615,8 +1615,11 @@ RecordTransactionCommit(void)
 		 * XLOG. Instead, we store the LSN up to which the XLOG must be
 		 * flushed before the CLOG may be updated.
 		 */
+		
+		//EDXXX: Code is repetitive, but keeping it to maintain if structure
 		if (markXidCommitted)
-			TransactionIdAsyncCommitTree(xid, nchildren, children, XactLastRecEnd);
+			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
+			//TransactionIdAsyncCommitTree(xid, nchildren, children, XactLastRecEnd);
 	}
 
 	/*
@@ -2418,9 +2421,18 @@ CommitTransaction(void)
 	TransactionId xid = GetTopTransactionIdIfAny();
 	bool		markXidCommitted = TransactionIdIsValid(xid);
 	bool wrote_xlog = (XactLastCommitEnd != 0);
+	RelFileNode *rels;
+	int nrels = smgrGetPendingDeletes(true, &rels);
 
 	if (wrote_xlog && markXidCommitted)
 		SyncRepWaitForLSN(XactLastCommitEnd, true);
+
+	if ((wrote_xlog && markXidCommitted &&
+		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
+		forceSyncCommit || nrels > 0)
+	{
+		XLogFlush(XactLastRecEnd);
+	}
 
 
 	/*
