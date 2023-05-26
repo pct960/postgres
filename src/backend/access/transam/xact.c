@@ -2418,14 +2418,11 @@ CommitTransaction(void)
 
 	ProcArrayEndTransaction(MyProc, latestXid);
 
-	TransactionId xid = GetTopTransactionIdIfAny();
-	bool		markXidCommitted = TransactionIdIsValid(xid);
+	//TransactionId xid = GetTopTransactionIdIfAny();
+	bool		markXidCommitted = TransactionIdIsValid(latestXid);
 	bool wrote_xlog = (XactLastCommitEnd != 0);
 	RelFileNode *rels;
 	int nrels = smgrGetPendingDeletes(true, &rels);
-
-	if (wrote_xlog && markXidCommitted)
-		SyncRepWaitForLSN(XactLastCommitEnd, true);
 
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
@@ -2433,6 +2430,10 @@ CommitTransaction(void)
 	{
 		XLogFlush(XactLastRecEnd);
 	}
+
+	if (wrote_xlog && markXidCommitted)
+		SyncRepWaitForLSN(XactLastCommitEnd, true);
+
 
 
 	/*
