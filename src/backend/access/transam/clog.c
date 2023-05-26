@@ -358,12 +358,12 @@ TransactionIdSetPageStatusInternal(TransactionId xid, int nsubxids,
 	 * write-busy, since we don't care if the update reaches disk sooner than
 	 * we think.
 	 */
-	//slotno = SimpleLruReadPage(XactCtl, pageno, XLogRecPtrIsInvalid(lsn), xid);
+	slotno = SimpleLruReadPage(XactCtl, pageno, XLogRecPtrIsInvalid(lsn), xid);
 	
 	// We ensure that the max_lsn of the page has been flushed into wal segment
 	// files. So, we don't have to worry about buffer cache changes being persisted
 	// to disk before wal changes have made to disk 
-	slotno = SimpleLruReadPage(XactCtl, pageno, true /* write_ok? */, xid);
+	//slotno = SimpleLruReadPage(XactCtl, pageno, true /* write_ok? */, xid);
 
 	/*
 	 * Set the main transaction id, if any.
