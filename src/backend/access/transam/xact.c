@@ -2416,6 +2416,7 @@ CommitTransaction(void)
 	 * RecordTransactionCommit.
 	 */
 
+	//elog(INFO, "before ending txn");
 	ProcArrayEndTransaction(MyProc, latestXid);
 
 	//TransactionId xid = GetTopTransactionIdIfAny();
@@ -2428,7 +2429,8 @@ CommitTransaction(void)
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
 	{
-		XLogFlush(XactLastRecEnd);
+		//elog(INFO, "flushing xlog to disk");
+		XLogFlush(XactLastCommitEnd);
 	}
 
 	if (wrote_xlog && markXidCommitted)
