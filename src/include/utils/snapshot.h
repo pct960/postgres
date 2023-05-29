@@ -207,6 +207,7 @@ typedef struct SnapshotData
 
 	TimestampTz whenTaken;		/* timestamp when snapshot was taken */
 	XLogRecPtr	lsn;			/* position in the WAL stream when taken */
+	XLogRecPtr	maxReadLSN;		/* max commit lsn among all tuples read*/
 
 	/*
 	 * The transaction completion count at the time GetSnapshotData() built

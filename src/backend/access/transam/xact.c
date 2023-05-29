@@ -68,7 +68,7 @@
 #include "utils/inval.h"
 #include "utils/memutils.h"
 #include "utils/relmapper.h"
-#include "utils/snapmgr.h"
+//#include "utils/snapmgr.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
@@ -1380,6 +1380,9 @@ RecordTransactionCommit(void)
 													 &RelcacheInitFileInval);
 	wrote_xlog = (XactLastRecEnd != 0);
 
+	//elog(INFO, "maxLSN at RTC: (%d)", maxLSN);
+	//elog(INFO, "snapshotlsn at RTC: (%d)", GetSnapshotMaxReadLSN());
+
 	/*
 	 * If we haven't been assigned an XID yet, we neither can, nor do we want
 	 * to write a COMMIT record.
@@ -1454,6 +1457,7 @@ RecordTransactionCommit(void)
 				//LWLockRelease(SyncRepLock);
 
 				XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
+				XLogRecPtr maxSnapshotReadLSN = GetSnapshotMaxReadLSN();
 				//XLogRecPtr minSentLSN = getMinSentLSN();
 				//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
 				//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
@@ -1473,8 +1477,8 @@ RecordTransactionCommit(void)
 
 				// EDXXX: The next todo is to only wait for the highest commit lsn we have seen, and not for the 
 				// the highest lsn in the xlog. Yet to think of a correct way of doing this.
-				if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
-					SyncRepWaitForLSN(maxLSN, false);
+				if(maxSnapshotReadLSN > remoteFlushLSN && remoteFlushLSN > 0)
+					SyncRepWaitForLSN(maxSnapshotReadLSN, false);
 			}
 		}
 		if (!wrote_xlog)

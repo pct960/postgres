@@ -2096,6 +2096,7 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 		 * dummy values that don't require any locking.
 		 */
 		snapshot->lsn = InvalidXLogRecPtr;
+		snapshot->maxReadLSN = InvalidXLogRecPtr;
 		snapshot->whenTaken = 0;
 	}
 	else
@@ -2106,6 +2107,7 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 		 * "old snapshot" logic.
 		 */
 		snapshot->lsn = GetXLogInsertRecPtr();
+		snapshot->maxReadLSN = InvalidXLogRecPtr;
 		snapshot->whenTaken = GetSnapshotCurrentTimestamp();
 		MaintainOldSnapshotTimeMapping(snapshot->whenTaken, snapshot->xmin);
 	}

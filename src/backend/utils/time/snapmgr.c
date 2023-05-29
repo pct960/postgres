@@ -499,6 +499,20 @@ SnapshotSetCommandId(CommandId curcid)
 	/* Should we do the same with CatalogSnapshot? */
 }
 
+XLogRecPtr GetSnapshotMaxReadLSN()
+{
+	if(CurrentSnapshot)
+		return CurrentSnapshot->maxReadLSN;
+	
+	return InvalidXLogRecPtr;
+}
+
+void SetSnapshotMaxReadLSN(XLogRecPtr maxLSN)
+{
+	if(CurrentSnapshot)
+		CurrentSnapshot->maxReadLSN = maxLSN;
+}
+
 /*
  * SetTransactionSnapshot
  *		Set the transaction's snapshot from an imported MVCC snapshot.

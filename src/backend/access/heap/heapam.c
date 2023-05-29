@@ -44,10 +44,10 @@
 #include "access/syncscan.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
-#include "access/transam.h"
+//#include "access/transam.h"
 #include "access/valid.h"
 #include "access/visibilitymap.h"
-#include "access/xact.h"
+//#include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
@@ -68,7 +68,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
-#include "utils/snapmgr.h"
+//#include "utils/snapmgr.h"
 #include "utils/spccache.h"
 
 
@@ -470,6 +470,15 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 			HeapCheckForSerializableConflictOut(valid, scan->rs_base.rs_rd,
 												&loctup, buffer, snapshot);
 
+			TransactionId t_xmin = HeapTupleHeaderGetXmin(loctup.t_data);
+			XLogRecPtr tup_commit_lsn = TransactionIdGetCommitLSN(t_xmin);
+			XLogRecPtr currMaxLSN = GetSnapshotMaxReadLSN();
+
+			if(tup_commit_lsn > currMaxLSN)
+				SetSnapshotMaxReadLSN(tup_commit_lsn);
+			
+			//elog(INFO, "heapgetpage reading xid: (%d), lsn: (%d)", t_xmin, tup_commit_lsn);
+
 			if (valid)
 				scan->rs_vistuples[ntup++] = lineoff;
 		}
@@ -714,6 +723,15 @@ heapgettup(HeapScanDesc scan,
 				HeapCheckForSerializableConflictOut(valid, scan->rs_base.rs_rd,
 													tuple, scan->rs_cbuf,
 													snapshot);
+
+                TransactionId t_xmin = HeapTupleHeaderGetXmin(tuple->t_data);
+                XLogRecPtr tup_commit_lsn = TransactionIdGetCommitLSN(t_xmin);
+                XLogRecPtr currMaxLSN = GetSnapshotMaxReadLSN();
+    
+                if(tup_commit_lsn > currMaxLSN)
+                    SetSnapshotMaxReadLSN(tup_commit_lsn);
+    
+                //elog(INFO, "heapgettup reading xid: (%d), lsn: (%d)", t_xmin, tup_commit_lsn);
 
 				if (valid && key != NULL)
 					HeapKeyTest(tuple, RelationGetDescr(scan->rs_base.rs_rd),
@@ -1626,6 +1644,15 @@ heap_fetch(Relation relation,
 
 	HeapCheckForSerializableConflictOut(valid, relation, tuple, buffer, snapshot);
 
+    TransactionId t_xmin = HeapTupleHeaderGetXmin(tuple->t_data);
+    XLogRecPtr tup_commit_lsn = TransactionIdGetCommitLSN(t_xmin);
+    XLogRecPtr currMaxLSN = GetSnapshotMaxReadLSN();
+
+    if(tup_commit_lsn > currMaxLSN)
+        SetSnapshotMaxReadLSN(tup_commit_lsn);
+
+    //elog(INFO, "heapfetch reading xid: (%d), lsn: (%d)", t_xmin, tup_commit_lsn);
+
 	LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 
 	if (valid)
@@ -1764,6 +1791,15 @@ heap_hot_search_buffer(ItemPointer tid, Relation relation, Buffer buffer,
 			valid = HeapTupleSatisfiesVisibility(heapTuple, snapshot, buffer);
 			HeapCheckForSerializableConflictOut(valid, relation, heapTuple,
 												buffer, snapshot);
+			
+            TransactionId t_xmin = HeapTupleHeaderGetXmin(heapTuple->t_data);
+            XLogRecPtr tup_commit_lsn = TransactionIdGetCommitLSN(t_xmin);
+            XLogRecPtr currMaxLSN = GetSnapshotMaxReadLSN();
+
+            if(tup_commit_lsn > currMaxLSN)
+                SetSnapshotMaxReadLSN(tup_commit_lsn);
+
+            //elog(INFO, "heaphotsearchbuffer reading xid: (%d), lsn: (%d)", t_xmin, tup_commit_lsn);
 
 			if (valid)
 			{
@@ -1911,6 +1947,15 @@ heap_get_latest_tid(TableScanDesc sscan,
 		HeapCheckForSerializableConflictOut(valid, relation, &tp, buffer, snapshot);
 		if (valid)
 			*tid = ctid;
+
+        TransactionId t_xmin = HeapTupleHeaderGetXmin(tp.t_data);
+        XLogRecPtr tup_commit_lsn = TransactionIdGetCommitLSN(t_xmin);
+        XLogRecPtr currMaxLSN = GetSnapshotMaxReadLSN();
+
+        if(tup_commit_lsn > currMaxLSN)
+            SetSnapshotMaxReadLSN(tup_commit_lsn);
+
+        //elog(INFO, "heap_get_latest_tid reading xid: (%d), lsn: (%d)", t_xmin, tup_commit_lsn);
 
 		/*
 		 * If there's a valid t_ctid link, follow it, else we're done.
