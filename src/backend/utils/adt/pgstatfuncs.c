@@ -902,6 +902,72 @@ pg_stat_get_activity(PG_FUNCTION_ARGS)
 	return (Datum) 0;
 }
 
+/*
+ * Returns whether an RO txn should wait
+ */
+bool
+pg_stat_should_wait()
+{
+	int			num_backends = pgstat_fetch_stat_numbackends();
+	int			curr_backend;
+
+
+	/* 1-based index */
+	for (curr_backend = 1; curr_backend <= num_backends; curr_backend++)
+	{
+		/* for each row */
+		LocalPgBackendStatus *local_beentry;
+		PgBackendStatus *beentry;
+		PGPROC	   *proc;
+		const char *wait_event_type = NULL;
+		const char *wait_event = NULL;
+		bool 		backend_has_xid;
+
+		/* Get the next one in the list */
+		local_beentry = pgstat_fetch_stat_local_beentry(curr_backend);
+		if (!local_beentry)
+			continue;
+
+		beentry = &local_beentry->backendStatus;
+
+		if(TransactionIdIsValid(local_beentry->backend_xid))
+			return true;
+		
+
+		proc = BackendPidGetProc(beentry->st_procpid);
+
+		if (proc == NULL && (beentry->st_backendType != B_BACKEND))
+		{
+			/*
+			 * For an auxiliary process, retrieve process info from
+			 * AuxiliaryProcs stored in shared-memory.
+			 */
+			proc = AuxiliaryPidGetProc(beentry->st_procpid);
+		}
+
+		/*
+			* If a PGPROC entry was retrieved, display wait events and lock
+			* group leader information if any.  To avoid extra overhead, no
+			* extra lock is being held, so there is no guarantee of
+			* consistency across multiple rows.
+			*/
+		if (proc != NULL)
+		{
+			uint32		raw_wait_event;
+			PGPROC	   *leader;
+
+			raw_wait_event = UINT32_ACCESS_ONCE(proc->wait_event_info);
+			WaitEventIPC w = (WaitEventIPC) raw_wait_event;
+
+			if(w == WAIT_EVENT_SYNC_REP)
+				return true;
+
+		}
+	}
+
+	return false;
+}
+
 
 Datum
 pg_backend_pid(PG_FUNCTION_ARGS)

@@ -631,6 +631,8 @@ struct xl_xact_stats_item;
 extern int	pgstat_get_transactional_drops(bool isCommit, struct xl_xact_stats_item **items);
 extern void pgstat_execute_transactional_drops(int ndrops, struct xl_xact_stats_item *items, bool is_redo);
 
+extern bool pg_stat_should_wait();
+
 
 /*
  * Functions in pgstat_wal.c

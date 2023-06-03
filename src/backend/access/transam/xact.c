@@ -1360,6 +1360,8 @@ RecordTransactionCommit(void)
 	SharedInvalidationMessage *invalMessages = NULL;
 	bool		RelcacheInitFileInval = false;
 	bool		wrote_xlog;
+	bool 		should_wait = false;
+	XLogRecPtr remoteFlushLSN;
 
 	/*
 	 * Log pending invalidations for logical decoding of in-progress
@@ -1430,51 +1432,28 @@ RecordTransactionCommit(void)
 				XLogFlush(maxLSN);
 			else
 			{
-				//XLogRecPtr XLogMaxLSN = XLogGetMaxLSN(NULL);
-				//maxLSN = XLogGetMaxLSN(NULL);
-				//XLogRecPtr walSndAppliedLSN = SyncRepGetWalSndLSN();
-				//XLogRecPtr RecentFlushPtr = InvalidXLogRecPtr;
-				//if (!RecoveryInProgress())
-				//	RecentFlushPtr = GetFlushRecPtr(NULL);
-				//else
-				//	RecentFlushPtr = GetXLogReplayRecPtr(NULL);
-
-				//LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
-				//PGPROC *proc; 
-				//proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[synchronous_commit]),
-				//					   &(WalSndCtl->SyncRepQueue[synchronous_commit]),
-				//					   offsetof(PGPROC, syncRepLinks));
-			
-				//if(proc)
-				//	elog(INFO, "queue not empty");
-				//else
-				//	elog(INFO, "queue empty");
-
-				//bool queueEmpty = SHMQueueEmpty(&(WalSndCtl->SyncRepQueue[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)]));
-				//LWLockRelease(SyncRepLock);
-
-				XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-				//XLogRecPtr minSentLSN = getMinSentLSN();
-				//XLogRecPtr maxSnapshotLSN = getMaxLSNFromSnapshot(); 
-				//XLogRecPtr maxSnapshotLSN = TransactionIdGetCommitLSN(MyProc->xmin);
-
-				//elog(INFO, "insert_rec_ptr = (%d), last_important_ptr = (%d)", GetInsertRecPtr(), GetLastImportantRecPtr());
-
-				// EDXXX: If remoteflushlsn = 0, then a read only transaction may not be able to decide if it has to add itself
-				// to the queue. Why? a write txn may have finished committing and becoming visible, but may not have enqueued itself
-				// in the syncrep queue. 
-
-				// To solve this issue. Here is a potential strategy that might work
-				// 1. 	Refer to pgstatfuncs.c to scan running backends.
-				// 		if a backend is running and has an xid, then it is a RW txn - so it's safe for the RO txn to add itself
-				// 		to the queue irrespective of which sync level it is waiting for (syncrepwakequeue will wake up all procs in all queues)
-				// 2.	If a backend is running and does not have an xid, then check its wait_event to see if it is in 'SyncRepWait' mode.
-				//		if yes, then it is safe for the RO txn to add itself to the queue.
+				remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 
 				// EDXXX: The next todo is to only wait for the highest commit lsn we have seen, and not for the 
-				// the highest lsn in the xlog. Yet to think of a correct way of doing this.
+				// the highest lsn in the xlog. Yet to think of an efficient way of doing this.
+				// Inefficient strategy:
+				// 1. Since all transactions now have their commit lsn recorded, we can use TransactionIdGetCommitLSN
+				// 2. For every tuple a transaction reads, get the commit lsn of the xmin and compare it with the 
+				// snapshot's current max lsn. Update if needed.
+				// 3. At commit time, the max lsn value is the value we need to wait for.
+				// 4. Use snapshot's max lsn to wait.
+				//
+				// This approach, however, is quite inefficient since reads are slowed down by over 50%
+				// (See lsn-tracking branch)
+
 				if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
-					SyncRepWaitForLSN(maxLSN, false);
+					should_wait = true;
+				else if(maxLSN == remoteFlushLSN || remoteFlushLSN == 0)
+					should_wait = pg_stat_should_wait();
+				
+				if(should_wait)
+					SyncRepWaitForLSN(maxLSN, true);
+					
 			}
 		}
 		if (!wrote_xlog)
@@ -2416,10 +2395,8 @@ CommitTransaction(void)
 	 * RecordTransactionCommit.
 	 */
 
-	//elog(INFO, "before ending txn");
 	ProcArrayEndTransaction(MyProc, latestXid);
 
-	//TransactionId xid = GetTopTransactionIdIfAny();
 	bool		markXidCommitted = TransactionIdIsValid(latestXid);
 	bool wrote_xlog = (XactLastCommitEnd != 0);
 	RelFileNode *rels;
@@ -2429,7 +2406,6 @@ CommitTransaction(void)
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
 	{
-		//elog(INFO, "flushing xlog to disk");
 		XLogFlush(XactLastCommitEnd);
 	}
 
