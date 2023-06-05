@@ -2095,7 +2095,6 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 		 * If not using "snapshot too old" feature, fill related fields with
 		 * dummy values that don't require any locking.
 		 */
-		snapshot->lsn = InvalidXLogRecPtr;
 		snapshot->whenTaken = 0;
 	}
 	else
@@ -2105,10 +2104,11 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 		 * snapshot becomes old enough to need to fall back on the special
 		 * "old snapshot" logic.
 		 */
-		snapshot->lsn = GetXLogInsertRecPtr();
 		snapshot->whenTaken = GetSnapshotCurrentTimestamp();
 		MaintainOldSnapshotTimeMapping(snapshot->whenTaken, snapshot->xmin);
 	}
+
+	snapshot->lsn = GetXLogInsertRecPtr();
 }
 
 /*

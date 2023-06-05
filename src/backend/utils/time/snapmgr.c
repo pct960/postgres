@@ -500,6 +500,19 @@ SnapshotSetCommandId(CommandId curcid)
 }
 
 /*
+ * GetCurrentSnapshotLSN
+ *		Propagate CommandCounterIncrement into the static snapshots, if set
+ */
+XLogRecPtr
+GetCurrentSnapshotLSN()
+{
+	if (CurrentSnapshot)
+		return CurrentSnapshot->lsn;
+	
+	return InvalidXLogRecPtr;
+}
+
+/*
  * SetTransactionSnapshot
  *		Set the transaction's snapshot from an imported MVCC snapshot.
  *

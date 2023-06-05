@@ -106,6 +106,7 @@ OldSnapshotThresholdActive(void)
 extern Snapshot GetTransactionSnapshot(void);
 extern Snapshot GetLatestSnapshot(void);
 extern void SnapshotSetCommandId(CommandId curcid);
+extern XLogRecPtr GetCurrentSnapshotLSN();
 extern Snapshot GetOldestSnapshot(void);
 
 extern Snapshot GetCatalogSnapshot(Oid relid);

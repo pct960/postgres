@@ -2098,7 +2098,8 @@ StartTransaction(void)
 	VirtualTransactionId vxid;
 
 	//maxLSN = XLogGetMaxLSN(NULL);
-	maxLSN = GetInsertRecPtr();
+	//maxLSN = GetXLogInsertRecPtr();
+	maxLSN = GetCurrentSnapshotLSN();
 	//elog(INFO, "maxlsn init");
 
 	/*
