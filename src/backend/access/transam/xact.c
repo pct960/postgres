@@ -135,8 +135,6 @@ static TransactionId *ParallelCurrentXids;
  */
 int			MyXactFlags;
 
-XLogRecPtr maxLSN = InvalidXLogRecPtr;
-
 /*
  *	transaction states - transaction state from server perspective
  */
@@ -1361,7 +1359,8 @@ RecordTransactionCommit(void)
 	bool		RelcacheInitFileInval = false;
 	bool		wrote_xlog;
 	bool 		should_wait = false;
-	XLogRecPtr remoteFlushLSN;
+	XLogRecPtr 	remoteFlushLSN;
+	XLogRecPtr	maxLSN = GetCurrentSnapshotLSN();
 
 	/*
 	 * Log pending invalidations for logical decoding of in-progress
@@ -2096,11 +2095,6 @@ StartTransaction(void)
 {
 	TransactionState s;
 	VirtualTransactionId vxid;
-
-	//maxLSN = XLogGetMaxLSN(NULL);
-	//maxLSN = GetXLogInsertRecPtr();
-	maxLSN = GetCurrentSnapshotLSN();
-	//elog(INFO, "maxlsn init");
 
 	/*
 	 * Let's just make sure the state stack is empty
