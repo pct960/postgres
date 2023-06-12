@@ -62,7 +62,7 @@ listen_addresses = '0.0.0.0'		# what IP address(es) to listen on;
 					# defaults to 'localhost'; use '*' for all
 					# (change requires restart)
 #port = 5432				# (change requires restart)
-max_connections = 100			# (change requires restart)
+max_connections = 1000			# (change requires restart)
 #superuser_reserved_connections = 3	# (change requires restart)
 #unix_socket_directories = '/tmp'	# comma-separated list of directories
 					# (change requires restart)
@@ -207,7 +207,7 @@ dynamic_shared_memory_type = posix	# the default is usually the first option
 #fsync = on				# flush data to disk for crash safety
 					# (turning this off can cause
 					# unrecoverable data corruption)
-synchronous_commit = remote_apply	# synchronization level;
+synchronous_commit = on			# synchronization level;
 					# off, local, remote_write, remote_apply, or on
 #wal_sync_method = fsync		# the default is the first option
 					# supported by the operating system:
@@ -319,7 +319,7 @@ min_wal_size = 80MB
 
 # These settings are ignored on a standby server.
 
-synchronous_standby_names = 'FIRST 2 (replica1, replica2)'	# standby servers that provide sync rep
+synchronous_standby_names = 'FIRST 1 (replica1)'	# standby servers that provide sync rep
 				# method to choose sync standbys, number of sync standbys,
 				# and comma-separated list of application_name
 				# from standby(s); '*' = all
@@ -687,7 +687,7 @@ cluster_name = 'master'			# added to process titles if nonempty
 #temp_tablespaces = ''			# a list of tablespace names, '' uses
 					# only default tablespace
 #check_function_bodies = on
-#default_transaction_isolation = 'read committed'
+default_transaction_isolation = 'serializable'
 #default_transaction_read_only = off
 #default_transaction_deferrable = off
 #session_replication_role = 'origin'
