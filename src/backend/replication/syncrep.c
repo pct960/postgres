@@ -217,23 +217,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	 */
 	MyProc->waitLSN = lsn;
 	MyProc->syncRepState = SYNC_REP_WAITING;
-	//PGPROC *proc; 
-	//proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
-	//							   &(WalSndCtl->SyncRepQueue[mode]),
-	//							   offsetof(PGPROC, syncRepLinks));
-
-	//if(!readOnlyWait || (readOnlyWait && proc))
 	SyncRepQueueInsert(mode);
-	//if(!commit)
-	//	elog(INFO, "RO Queue length = (%d)", SyncRepGetQueueLength(mode));
-	//else
-	//	elog(INFO, "Write Queue length = (%d)", SyncRepGetQueueLength(mode));
-
-	//else
-	//{
-	//	LWLockRelease(SyncRepLock);
-	//	return;
-	//}
 
 	Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
@@ -252,7 +236,6 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 		new_status[len] = '\0'; /* truncate off " waiting ..." */
 	}
 
-	//elog(INFO, "Before the wait loop in syncrep");
 	/*
 	 * Wait for specified LSN to be confirmed.
 	 *
@@ -320,10 +303,8 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 		 * Wait on latch.  Any condition that should wake us up will set the
 		 * latch, so no need for timeout.
 		 */
-		//elog(INFO, "before waitlatch");
 		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1,
 					   WAIT_EVENT_SYNC_REP);
-		//elog(INFO, "after waitlatch");
 
 		/*
 		 * If the postmaster dies, we'll probably never get an acknowledgment,
@@ -650,92 +631,6 @@ SyncRepGetSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
 }
 
 /*
- * Calculate the latest synced Write, Flush and Apply positions among sync standbys.
- *
- * Return false if the number of sync standbys is less than
- * synchronous_standby_names specifies. Otherwise return true and
- * store the positions into *writePtr, *flushPtr and *applyPtr.
- *
- * On return, *am_sync is set to true if this walsender is connecting to
- * sync standby. Otherwise it's set to false.
- */
-static bool
-SyncRepGetLatestSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
-					 XLogRecPtr *applyPtr)
-{
-	SyncRepStandbyData *sync_standbys;
-	int			num_standbys;
-	int			i;
-
-	/* Initialize default results */
-	*writePtr = InvalidXLogRecPtr;
-	*flushPtr = InvalidXLogRecPtr;
-	*applyPtr = InvalidXLogRecPtr;
-
-	/* Quick out if not even configured to be synchronous */
-	if (SyncRepConfig == NULL)
-		return false;
-
-	///* Get standbys that are considered as synchronous at this moment */
-	num_standbys = SyncRepGetCandidateStandbys(&sync_standbys);
-
-	///* Am I among the candidate sync standbys? */
-	//for (i = 0; i < num_standbys; i++)
-	//{
-	//	if (sync_standbys[i].is_me)
-	//	{
-	//		*am_sync = true;
-	//		break;
-	//	}
-	//}
-
-	///*
-	// * Nothing more to do if we are not managing a sync standby or there are
-	// * not enough synchronous standbys.
-	// */
-	//if(!overrideAmSync)
-	//{
-	//	if (!(*am_sync) ||
-	//	num_standbys < SyncRepConfig->num_sync)
-	//	{
-	//		elog(INFO, "Not enough standbys, returning. num_standbys = (%d), num_sync = (%d)", num_standbys, SyncRepConfig->num_sync);
-	//		pfree(sync_standbys);
-	//		return false;
-	//	}
-	//}
-
-	/*
-	 * In a priority-based sync replication, the synced positions are the
-	 * oldest ones among sync standbys. In a quorum-based, they are the Nth
-	 * latest ones.
-	 *
-	 * SyncRepGetNthLatestSyncRecPtr() also can calculate the oldest
-	 * positions. But we use SyncRepGetOldestSyncRecPtr() for that calculation
-	 * because it's a bit more efficient.
-	 *
-	 * XXX If the numbers of current and requested sync standbys are the same,
-	 * we can use SyncRepGetOldestSyncRecPtr() to calculate the synced
-	 * positions even in a quorum-based sync replication.
-	 */
-	SyncRepGetNewestSyncRecPtr(writePtr, flushPtr, applyPtr,
-								sync_standbys, num_standbys);
-	//if (SyncRepConfig->syncrep_method == SYNC_REP_PRIORITY)
-	//{
-	//	SyncRepGetOldestSyncRecPtr(writePtr, flushPtr, applyPtr,
-	//							   sync_standbys, num_standbys);
-	//}
-	//else
-	//{
-	//	SyncRepGetNthLatestSyncRecPtr(writePtr, flushPtr, applyPtr,
-	//								  sync_standbys, num_standbys,
-	//								  SyncRepConfig->num_sync);
-	//}
-
-	pfree(sync_standbys);
-	return true;
-}
-
-/*
  * Calculate the oldest Write, Flush and Apply positions among sync standbys.
  */
 static void
@@ -763,38 +658,6 @@ SyncRepGetOldestSyncRecPtr(XLogRecPtr *writePtr,
 		if (XLogRecPtrIsInvalid(*flushPtr) || *flushPtr > flush)
 			*flushPtr = flush;
 		if (XLogRecPtrIsInvalid(*applyPtr) || *applyPtr > apply)
-			*applyPtr = apply;
-	}
-}
-
-/*
- * Calculate the newest Write, Flush and Apply positions among sync standbys.
- */
-static void
-SyncRepGetNewestSyncRecPtr(XLogRecPtr *writePtr,
-						   XLogRecPtr *flushPtr,
-						   XLogRecPtr *applyPtr,
-						   SyncRepStandbyData *sync_standbys,
-						   int num_standbys)
-{
-	int			i;
-
-	/*
-	 * Scan through all sync standbys and calculate the oldest Write, Flush
-	 * and Apply positions.  We assume *writePtr et al were initialized to
-	 * InvalidXLogRecPtr.
-	 */
-	for (i = 0; i < num_standbys; i++)
-	{
-		XLogRecPtr	write = sync_standbys[i].write;
-		XLogRecPtr	flush = sync_standbys[i].flush;
-		XLogRecPtr	apply = sync_standbys[i].apply;
-
-		if (XLogRecPtrIsInvalid(*writePtr) || *writePtr < write)
-			*writePtr = write;
-		if (XLogRecPtrIsInvalid(*flushPtr) || *flushPtr < flush)
-			*flushPtr = flush;
-		if (XLogRecPtrIsInvalid(*applyPtr) || *applyPtr < apply)
 			*applyPtr = apply;
 	}
 }
