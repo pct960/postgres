@@ -105,14 +105,6 @@ static bool SyncRepGetSyncRecPtr(XLogRecPtr *writePtr,
 								 XLogRecPtr *flushPtr,
 								 XLogRecPtr *applyPtr,
 								 bool *am_sync);
-static bool SyncRepGetLatestSyncRecPtr(XLogRecPtr *writePtr,
-								 XLogRecPtr *flushPtr,
-								 XLogRecPtr *applyPtr);
-static void SyncRepGetNewestSyncRecPtr(XLogRecPtr *writePtr,
-									   XLogRecPtr *flushPtr,
-									   XLogRecPtr *applyPtr,
-									   SyncRepStandbyData *sync_standbys,
-									   int num_standbys);
 static void SyncRepGetOldestSyncRecPtr(XLogRecPtr *writePtr,
 									   XLogRecPtr *flushPtr,
 									   XLogRecPtr *applyPtr,
@@ -153,7 +145,7 @@ static bool SyncRepQueueIsOrderedByLSN(int mode);
  * remote_apply, because only commit records provide apply feedback.
  */
 void
-SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
+SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 {
 	char	   *new_status = NULL;
 	const char *old_status;
@@ -206,7 +198,6 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit /*, bool readOnlyWait */)
 	if (!WalSndCtl->sync_standbys_defined ||
 		lsn <= WalSndCtl->lsn[mode])
 	{
-		//elog(INFO, "early return from syncrep");
 		LWLockRelease(SyncRepLock);
 		return;
 	}
@@ -596,7 +587,6 @@ SyncRepGetSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
 	 */
 	if (!(*am_sync) || num_standbys < SyncRepConfig->num_sync)
 	{
-		//elog(INFO, "Not enough standbys, returning. num_standbys = (%d), num_sync = (%d)", num_standbys, SyncRepConfig->num_sync);
 		pfree(sync_standbys);
 		return false;
 	}
@@ -907,7 +897,6 @@ SyncRepWakeQueue(bool all, int mode)
 		 * Assume the queue is ordered by LSN
 		 */
 
-		//elog(INFO, "In SyncRepWakeQueue. walsndctl->lsn = (%d), proc->waitlsn = (%d)", walsndctl->lsn[mode], proc->waitLSN);
 		if (!all && walsndctl->lsn[mode] < proc->waitLSN)
 			return numprocs;
 

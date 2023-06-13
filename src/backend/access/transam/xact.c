@@ -1489,18 +1489,11 @@ RecordTransactionCommit(void)
 	 * anyway if we crash.)
 	 */
 
-	//XLogRecPtr remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-
-	//elog(INFO, "maxLSN = (%d), remoteflushlsn = (%d), active backends = (%d)", maxLSN, remoteFlushLSN, MinimumActiveBackends(1));
 
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
 	{
-		//XLogRecPtr maxLSN = XLogGetMaxLSN(0);
-		//elog(INFO, "XactLastRecEnd=(%d), maxLSN=(%d), WalSndCtl->lsn[mode]=(%d, %d, %d)", XactLastRecEnd, maxLSN, WalSndCtl->lsn[0], WalSndCtl->lsn[1], WalSndCtl->lsn[2]);
-		//XLogFlush(XactLastRecEnd);
-
 		/*
 		 * Now we may update the CLOG, if we wrote a COMMIT record above
 		 */
@@ -1556,10 +1549,6 @@ RecordTransactionCommit(void)
 	 * Note that at this stage we have marked clog, but still show as running
 	 * in the procarray and continue to hold locks.
 	 */
-
-	//elog(INFO, "xid = (%d), xmin = (%d), xmax = (%d)", xid, MyProc->xmin,XidFromFullTransactionId(ShmemVariableCache->latestCompletedXid));
-	//if (wrote_xlog && markXidCommitted)
-	//	SyncRepWaitForLSN(XactLastRecEnd, true);
 
 	/* remember end of last commit record */
 	XactLastCommitEnd = XactLastRecEnd;

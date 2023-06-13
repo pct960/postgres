@@ -1044,8 +1044,6 @@ exec_simple_query(const char *query_string)
 	 */
 	parsetree_list = pg_parse_query(query_string);
 
-	//elog(FATAL, "just testing here");
-
 	/* Log immediately if dictated by log_statement */
 	if (check_log_statement(parsetree_list))
 	{
