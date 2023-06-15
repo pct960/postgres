@@ -1381,7 +1381,7 @@ RecordTransactionCommit(void)
 
 				if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
 					should_wait = true;
-				else if(maxLSN == remoteFlushLSN || remoteFlushLSN == 0)
+				else if(remoteFlushLSN == 0)
 					should_wait = pg_stat_should_wait();
 				
 				if(should_wait)
