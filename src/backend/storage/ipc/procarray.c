@@ -2108,7 +2108,7 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 		MaintainOldSnapshotTimeMapping(snapshot->whenTaken, snapshot->xmin);
 	}
 
-	snapshot->lsn = GetXLogInsertRecPtr();
+	snapshot->lsn = GetInsertRecPtr();
 }
 
 /*
