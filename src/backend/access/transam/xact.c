@@ -2330,7 +2330,9 @@ CommitTransaction(void)
 	if (wrote_xlog && markXidCommitted)
 		SyncRepWaitForLSN(XactLastCommitEnd, true);
 
-
+	// Free up space
+	if (rels)
+		pfree(rels);
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
