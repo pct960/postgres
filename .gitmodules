@@ -1,3 +1,4 @@
-[submodule "benchbase"]
-	path = benchbase
+[submodule "ed-tests/tpcc/benchbase"]
+	path = ed-tests/tpcc/benchbase
 	url = https://github.com/pct960/benchbase
+  branch = ed-tests
