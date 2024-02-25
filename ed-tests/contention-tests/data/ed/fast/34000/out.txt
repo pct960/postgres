@@ -1,0 +1,29 @@
+pgbench (15.1)
+transaction type: update.sql
+scaling factor: 1
+query mode: simple
+number of clients: 128
+number of threads: 16
+maximum number of tries: 5
+duration: 120 s
+number of transactions actually processed: 2763680
+number of failed transactions: 69319 (2.447%)
+number of serialization failures: 69319 (2.447%)
+number of deadlock failures: 0 (0.000%)
+number of transactions retried: 1332165 (47.023%)
+total number of retries: 2378499
+latency average = 18266.341 ms
+latency stddev = 10500.473 ms
+rate limit schedule lag: avg 18261.309 (max 37172.777) ms
+initial connection time = 25.998 ms
+tps = 23032.888573 (without initial connection time)
+statement latencies in milliseconds, failures and retries:
+         0.000           0           0  \set delta random(1, 100)
+         0.000           0           0  \set rowcount 250
+         0.000           0           0  \set first_segment int((1 - :split) * :rowcount)
+         0.000           0           0  \if :delta <= (:split * 100)
+         0.000           0           0  \set key random(1, :first_segment)
+         0.000           0           0  \else
+         0.000           0           0  \set key random(:first_segment + 1, :rowcount)
+         0.000           0           0  \endif
+         2.958       69318     2376407  update data set value = :delta where key = :key;

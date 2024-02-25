@@ -1,0 +1,27 @@
+Completed Transactions:
+com.oltpbenchmark.benchmarks.tpcc.procedures.NewOrder/01                         [187213] ********************************************************************************
+com.oltpbenchmark.benchmarks.tpcc.procedures.Payment/02                          [180246] *****************************************************************************
+com.oltpbenchmark.benchmarks.tpcc.procedures.OrderStatus/03                      [ 16754] *******
+com.oltpbenchmark.benchmarks.tpcc.procedures.Delivery/04                         [ 16931] *******
+com.oltpbenchmark.benchmarks.tpcc.procedures.StockLevel/05                       [ 16542] *******
+
+Aborted Transactions:
+com.oltpbenchmark.benchmarks.tpcc.procedures.NewOrder/01                         [1976] ********************************************************************************
+
+Rejected Transactions (Server Retry):
+com.oltpbenchmark.benchmarks.tpcc.procedures.NewOrder/01                         [5505] *******************************************************
+com.oltpbenchmark.benchmarks.tpcc.procedures.Payment/02                          [7895] ********************************************************************************
+com.oltpbenchmark.benchmarks.tpcc.procedures.Delivery/04                         [ 641] ******
+com.oltpbenchmark.benchmarks.tpcc.procedures.StockLevel/05                       [  27]
+
+Rejected Transactions (Retry Different):
+<EMPTY>
+
+Unexpected SQL Errors:
+<EMPTY>
+
+Unknown Status Transactions:
+<EMPTY>
+
+
+[INFO ] 2024-02-12 14:21:31,538 [main]  com.oltpbenchmark.DBWorkload writeHistograms - ======================================================================

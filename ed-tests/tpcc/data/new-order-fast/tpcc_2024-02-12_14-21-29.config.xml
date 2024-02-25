@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<configuration>
+  <safeurl>jdbc:postgresql://10.0.1.48:5432/benchbase?sslmode=disable&amp;ApplicationName=tpcc&amp;reWriteBatchedInserts=true&amp;options=-c%20synchronous_commit=on</safeurl>
+  <fasturl>jdbc:postgresql://10.0.1.48:5432/benchbase?sslmode=disable&amp;ApplicationName=tpcc&amp;reWriteBatchedInserts=true&amp;options=-c%20synchronous_commit=off</fasturl>
+  <isolation>TRANSACTION_SERIALIZABLE</isolation>
+  <batchsize>128</batchsize>
+  <scalefactor>10</scalefactor>
+  <terminals>100</terminals>
+  <works>
+    <work>
+      <time>600</time>
+      <rate>700</rate>
+      <weights>45,43,4,4,4</weights>
+    </work>
+  </works>
+  <transactiontypes>
+    <transactiontype>
+      <name>NewOrder</name>
+    </transactiontype>
+    <transactiontype>
+      <name>Payment</name>
+    </transactiontype>
+    <transactiontype>
+      <name>OrderStatus</name>
+    </transactiontype>
+    <transactiontype>
+      <name>Delivery</name>
+    </transactiontype>
+    <transactiontype>
+      <name>StockLevel</name>
+    </transactiontype>
+  </transactiontypes>
+</configuration>

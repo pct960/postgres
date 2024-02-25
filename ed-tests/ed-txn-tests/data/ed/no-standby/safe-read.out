@@ -1,0 +1,16 @@
+pgbench (15.1)
+transaction type: read.sql
+scaling factor: 1
+query mode: simple
+number of clients: 1
+number of threads: 1
+maximum number of tries: 1
+duration: 120 s
+number of transactions actually processed: 393866
+number of failed transactions: 0 (0.000%)
+latency average = 0.305 ms
+initial connection time = 2.399 ms
+tps = 3282.276514 (without initial connection time)
+statement latencies in milliseconds and failures:
+         0.000           0  \set i random(1, 1000000)
+         0.303           0  select * from data where key = :i;

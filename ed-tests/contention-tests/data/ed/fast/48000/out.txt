@@ -1,0 +1,19 @@
+pgbench (15.1)
+transaction type: update.sql
+scaling factor: 1
+query mode: simple
+number of clients: 128
+number of threads: 16
+maximum number of tries: 5
+duration: 120 s
+number of transactions actually processed: 2823138
+number of failed transactions: 78688 (2.712%)
+number of serialization failures: 78688 (2.712%)
+number of deadlock failures: 0 (0.000%)
+number of transactions retried: 1382197 (47.632%)
+total number of retries: 2509131
+latency average = 29685.066 ms
+latency stddev = 17172.632 ms
+rate limit schedule lag: avg 29680.170 (max 59878.233) ms
+initial connection time = 26.884 ms
+tps = 23528.447357 (without initial connection time)

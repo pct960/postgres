@@ -1,0 +1,16 @@
+transaction type: write-fast.sql
+scaling factor: 1
+query mode: simple
+number of clients: 1
+number of threads: 1
+maximum number of tries: 1
+duration: 120 s
+number of transactions actually processed: 1589
+number of failed transactions: 0 (0.000%)
+latency average = 75.537 ms
+initial connection time = 2.364 ms
+tps = 13.238627 (without initial connection time)
+statement latencies in milliseconds and failures:
+         0.000           0  \set i random(1,100000)
+         0.000           0  \set j random(1,100000)
+        75.534           0  update data set value = :j where key = :i;
