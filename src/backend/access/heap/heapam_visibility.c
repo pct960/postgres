@@ -71,6 +71,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "nodes/pg_list.h"
 #include "storage/bufmgr.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
@@ -1074,10 +1075,16 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 	/* by here, the inserting transaction has committed */
 
 	if (tuple->t_infomask & HEAP_XMAX_INVALID)	/* xid invalid or aborted */
+	{
+		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
 		return true;
+	}
 
 	if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
+	{
+		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
 		return true;
+	}
 
 	if (tuple->t_infomask & HEAP_XMAX_IS_MULTI)
 	{
@@ -1117,13 +1124,18 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 		}
 
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
+		{
+			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
 			return true;
+		}
 
 		if (!TransactionIdDidCommit(HeapTupleHeaderGetRawXmax(tuple)))
 		{
 			/* it must have aborted or crashed */
 			SetHintBits(tuple, buffer, HEAP_XMAX_INVALID,
 						InvalidTransactionId);
+			
+			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
 			return true;
 		}
 
@@ -1135,11 +1147,15 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 	{
 		/* xmax is committed, but maybe not according to our snapshot */
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
+		{
+			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
 			return true;		/* treat as still in progress */
+		}
 	}
 
 	/* xmax transaction committed */
-
+	if (!(tuple->t_infomask & HEAP_XMAX_INVALID))
+		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmax(tuple));
 	return false;
 }
 

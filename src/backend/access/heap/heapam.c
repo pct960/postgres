@@ -53,6 +53,7 @@
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "miscadmin.h"
+#include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "port/atomics.h"
 #include "port/pg_bitutils.h"
@@ -216,6 +217,7 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 #define TUPLOCK_from_mxstatus(status) \
 			(MultiXactStatusLock[(status)])
 
+List *read_xid_list = NIL;
 /* ----------------------------------------------------------------
  *						 heap support routines
  * ----------------------------------------------------------------
@@ -466,7 +468,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 				valid = true;
 			else
 				valid = HeapTupleSatisfiesVisibility(&loctup, snapshot, buffer);
-
+			
 			HeapCheckForSerializableConflictOut(valid, scan->rs_base.rs_rd,
 												&loctup, buffer, snapshot);
 

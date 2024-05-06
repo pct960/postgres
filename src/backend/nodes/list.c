@@ -687,7 +687,7 @@ list_member_int(const List *list, int datum)
 
 	foreach(cell, list)
 	{
-		if (lfirst_int(cell) == datum)
+		if (datum == (uint32) lfirst_int(cell))
 			return true;
 	}
 

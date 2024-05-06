@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "access/commit_ts.h"
+#include "access/heapam.h"
 #include "access/multixact.h"
 #include "access/parallel.h"
 #include "access/subtrans.h"
@@ -43,6 +44,7 @@
 #include "libpq/be-fsstubs.h"
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
+#include "nodes/pg_list.h"
 #include "pg_trace.h"
 #include "pgstat.h"
 #include "replication/logical.h"
@@ -1361,6 +1363,11 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
+			ListCell   *cell;
+
+			foreach(cell, read_xid_list)
+				elog(INFO, "EdLsnTracking: Read from xid %u", lfirst(cell));
+
 			if(!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
 				XLogFlush(maxLSN);
 			else

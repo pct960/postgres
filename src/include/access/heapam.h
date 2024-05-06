@@ -22,6 +22,7 @@
 #include "access/tableam.h"
 #include "nodes/lockoptions.h"
 #include "nodes/primnodes.h"
+#include "nodes/pg_list.h"
 #include "storage/bufpage.h"
 #include "storage/dsm.h"
 #include "storage/lockdefs.h"
@@ -113,6 +114,8 @@ typedef enum
  *		True iff the heap scan is valid.
  */
 #define HeapScanIsValid(scan) PointerIsValid(scan)
+
+extern List *read_xid_list;
 
 extern TableScanDesc heap_beginscan(Relation relation, Snapshot snapshot,
 									int nkeys, ScanKey key,
