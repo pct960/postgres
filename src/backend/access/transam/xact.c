@@ -1363,10 +1363,10 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			ListCell   *cell;
+			//ListCell   *cell;
 
-			foreach(cell, read_xid_list)
-				elog(INFO, "EdLsnTracking: Read from xid %u", lfirst(cell));
+			//foreach(cell, read_xid_list)
+			//	elog(INFO, "EdLsnTracking: Read from xid %u", lfirst(cell));
 
 			if(!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
 				XLogFlush(maxLSN);
@@ -2986,6 +2986,8 @@ CleanupTransaction(void)
 void
 StartTransactionCommand(void)
 {
+	read_xid_list = NIL;
+
 	TransactionState s = CurrentTransactionState;
 
 	switch (s->blockState)

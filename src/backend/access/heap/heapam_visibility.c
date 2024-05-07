@@ -76,6 +76,7 @@
 #include "storage/procarray.h"
 #include "utils/builtins.h"
 #include "utils/combocid.h"
+#include "utils/memutils.h"
 #include "utils/snapmgr.h"
 
 
@@ -960,6 +961,7 @@ static bool
 HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 					   Buffer buffer)
 {
+	MemoryContext oldContext;
 	HeapTupleHeader tuple = htup->t_data;
 
 	Assert(ItemPointerIsValid(&htup->t_self));
@@ -1076,13 +1078,17 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 	if (tuple->t_infomask & HEAP_XMAX_INVALID)	/* xid invalid or aborted */
 	{
+		oldContext = MemoryContextSwitchTo(CurTransactionContext);
 		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+		MemoryContextSwitchTo(oldContext);
 		return true;
 	}
 
 	if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
 	{
+		oldContext = MemoryContextSwitchTo(CurTransactionContext);
 		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+		MemoryContextSwitchTo(oldContext);
 		return true;
 	}
 
@@ -1125,7 +1131,9 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
+			oldContext = MemoryContextSwitchTo(CurTransactionContext);
 			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+			MemoryContextSwitchTo(oldContext);
 			return true;
 		}
 
@@ -1135,7 +1143,9 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 			SetHintBits(tuple, buffer, HEAP_XMAX_INVALID,
 						InvalidTransactionId);
 			
+			oldContext = MemoryContextSwitchTo(CurTransactionContext);
 			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+			MemoryContextSwitchTo(oldContext);
 			return true;
 		}
 
@@ -1148,14 +1158,17 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 		/* xmax is committed, but maybe not according to our snapshot */
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
+			oldContext = MemoryContextSwitchTo(CurTransactionContext);
 			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+			MemoryContextSwitchTo(oldContext);
 			return true;		/* treat as still in progress */
 		}
 	}
 
 	/* xmax transaction committed */
-	if (!(tuple->t_infomask & HEAP_XMAX_INVALID))
-		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmax(tuple));
+	oldContext = MemoryContextSwitchTo(CurTransactionContext);
+	read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmax(tuple));
+	MemoryContextSwitchTo(oldContext);
 	return false;
 }
 

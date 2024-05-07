@@ -36,6 +36,7 @@
 #include "rusagestub.h"
 #endif
 
+#include "access/heapam.h"
 #include "access/parallel.h"
 #include "access/printtup.h"
 #include "access/xact.h"
@@ -999,6 +1000,8 @@ exec_simple_query(const char *query_string)
 	bool		was_logged = false;
 	bool		use_implicit_block;
 	char		msec_str[32];
+
+	read_xid_list = NIL;
 
 	/*
 	 * Report query to various monitoring facilities.
