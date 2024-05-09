@@ -62,6 +62,7 @@
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "common/hashfn.h"
 #include "funcapi.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
@@ -69,6 +70,7 @@
 #include "nodes/replnodes.h"
 #include "pgstat.h"
 #include "postmaster/interrupt.h"
+#include "postmaster/walwriter.h"
 #include "replication/decode.h"
 #include "replication/logical.h"
 #include "replication/slot.h"
@@ -111,6 +113,8 @@ WalSndCtlData *WalSndCtl = NULL;
 
 /* My slot in the shared memory array */
 WalSnd	   *MyWalSnd = NULL;
+
+HTAB *NonDurableTxnHash = NULL;
 
 /* Global state */
 bool		am_walsender = false;	/* Am I a walsender process? */
@@ -261,6 +265,8 @@ static bool TransactionIdInRecentPast(TransactionId xid, uint32 epoch);
 static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
+static uint32 hash_non_durable_txn(const NonDurableTxnKey *key);
+static bool match_non_durable_txn_hash(const NonDurableTxnKey *key1, const NonDurableTxnKey *key2);
 
 /* Initialize walsender process before entering the main command loop */
 void
@@ -3278,6 +3284,8 @@ WalSndShmemInit(void)
 {
 	bool		found;
 	int			i;
+	Size		size = 0;
+	HASHCTL		hctl;
 
 	WalSndCtl = (WalSndCtlData *)
 		ShmemInitStruct("Wal Sender Ctl", WalSndShmemSize(), &found);
@@ -3297,6 +3305,56 @@ WalSndShmemInit(void)
 			SpinLockInit(&walsnd->mutex);
 		}
 	}
+
+	size = add_size(size, sizeof(NonDurableTxnEntry) * WalWriterFlushAfter);
+	RequestAddinShmemSpace(size);
+
+	memset(&hctl, 0, sizeof(hctl));
+	hctl.keysize = sizeof(NonDurableTxnKey);
+	hctl.entrysize = sizeof(NonDurableTxnEntry);
+	hctl.hcxt = TopMemoryContext;
+	hctl.hash = (HashValueFunc) hash_non_durable_txn;
+	hctl.match = (HashCompareFunc) match_non_durable_txn_hash;
+
+	NonDurableTxnHash = ShmemInitHash("NonDurableTxnHash",
+									  sizeof(NonDurableTxnKey),
+									  size,
+									  &hctl,
+									  HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
+}
+
+static uint32
+hash_non_durable_txn(const NonDurableTxnKey *key)
+{
+	uint32 hash1 = hash_uint32((uint32) key->xid);
+    uint32 hash2 = hash_uint32((uint32) (key->commit_lsn));
+
+	return hash1 ^ hash2;
+}
+
+static bool
+match_non_durable_txn_hash(const NonDurableTxnKey *key1, const NonDurableTxnKey *key2)
+{
+	return key1->xid == key2->xid || key1->commit_lsn == key2->commit_lsn;
+}
+
+void
+insert_into_non_durable_txn_hash(NonDurableTxnKey *key, NonDurableTxnEntry *entry)
+{
+	bool found;
+
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_ENTER, &found);
+	if (!found)
+		entry->commit_lsn = key->commit_lsn;
+}
+
+bool
+lookup_non_durable_txn_hash(NonDurableTxnKey *key)
+{
+	NonDurableTxnEntry *entry;
+
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_FIND, NULL);
+	return entry != NULL;
 }
 
 /*

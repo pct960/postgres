@@ -107,6 +107,20 @@ typedef struct
 	WalSnd		walsnds[FLEXIBLE_ARRAY_MEMBER];
 } WalSndCtlData;
 
+typedef struct NonDurableTxnKey
+{
+	TransactionId xid;
+	XLogRecPtr commit_lsn;
+} NonDurableTxnKey;
+
+typedef struct NonDurableTxnEntry
+{
+	NonDurableTxnKey key;
+	XLogRecPtr		commit_lsn;
+} NonDurableTxnEntry;
+
+extern HTAB *NonDurableTxnHash;
+
 extern PGDLLIMPORT WalSndCtlData *WalSndCtl;
 
 
@@ -122,6 +136,7 @@ extern void replication_yyerror(const char *str) pg_attribute_noreturn();
 extern void replication_scanner_init(const char *query_string);
 extern void replication_scanner_finish(void);
 extern bool replication_scanner_is_replication_command(void);
+extern add_entry_to_non_durable_txn_list(TransactionId xid, XLogRecPtr commit_lsn);
 
 extern PGDLLIMPORT Node *replication_parse_result;
 

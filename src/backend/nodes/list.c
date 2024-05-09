@@ -69,15 +69,6 @@ check_list_invariants(const List *list)
 	Assert(list->length <= list->max_length);
 	Assert(list->elements != NULL);
 
-	if (list->type != NULL)
-	{
-		elog(INFO, "list type: %d", list->type);
-	}
-	else
-	{
-		elog(INFO, "list type: NULL");
-	}
-
 	Assert(list->type == T_List ||
 		   list->type == T_IntList ||
 		   list->type == T_OidList);
