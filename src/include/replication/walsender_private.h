@@ -115,7 +115,7 @@ typedef struct NonDurableTxnKey
 
 typedef struct NonDurableTxnEntry
 {
-	NonDurableTxnKey key;
+	NonDurableTxnKey *key;
 	XLogRecPtr		commit_lsn;
 } NonDurableTxnEntry;
 
@@ -136,7 +136,8 @@ extern void replication_yyerror(const char *str) pg_attribute_noreturn();
 extern void replication_scanner_init(const char *query_string);
 extern void replication_scanner_finish(void);
 extern bool replication_scanner_is_replication_command(void);
-extern add_entry_to_non_durable_txn_list(TransactionId xid, XLogRecPtr commit_lsn);
+extern void insert_into_non_durable_txn_htable(NonDurableTxnKey *key);
+extern bool lookup_non_durable_txn(NonDurableTxnKey *key);
 
 extern PGDLLIMPORT Node *replication_parse_result;
 

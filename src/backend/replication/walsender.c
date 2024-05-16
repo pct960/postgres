@@ -3284,8 +3284,8 @@ WalSndShmemInit(void)
 {
 	bool		found;
 	int			i;
-	Size		size = 0;
 	HASHCTL		hctl;
+	long		size;
 
 	WalSndCtl = (WalSndCtlData *)
 		ShmemInitStruct("Wal Sender Ctl", WalSndShmemSize(), &found);
@@ -3306,8 +3306,7 @@ WalSndShmemInit(void)
 		}
 	}
 
-	size = add_size(size, sizeof(NonDurableTxnEntry) * WalWriterFlushAfter);
-	RequestAddinShmemSpace(size);
+	size = sizeof(NonDurableTxnEntry) * WalWriterFlushAfter;
 
 	memset(&hctl, 0, sizeof(hctl));
 	hctl.keysize = sizeof(NonDurableTxnKey);
@@ -3317,7 +3316,7 @@ WalSndShmemInit(void)
 	hctl.match = (HashCompareFunc) match_non_durable_txn_hash;
 
 	NonDurableTxnHash = ShmemInitHash("NonDurableTxnHash",
-									  sizeof(NonDurableTxnKey),
+									  size/2,
 									  size,
 									  &hctl,
 									  HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
@@ -3335,13 +3334,20 @@ hash_non_durable_txn(const NonDurableTxnKey *key)
 static bool
 match_non_durable_txn_hash(const NonDurableTxnKey *key1, const NonDurableTxnKey *key2)
 {
-	return key1->xid == key2->xid || key1->commit_lsn == key2->commit_lsn;
+	if (key1->xid != InvalidTransactionId && key2->xid != InvalidTransactionId)
+		return key1->xid == key2->xid;
+	
+	if (key1->commit_lsn != InvalidXLogRecPtr && key2->commit_lsn != InvalidXLogRecPtr)
+		return key1->commit_lsn == key2->commit_lsn;
+	
+	return false;
 }
 
 void
-insert_into_non_durable_txn_hash(NonDurableTxnKey *key, NonDurableTxnEntry *entry)
+insert_into_non_durable_txn_htable(NonDurableTxnKey *key)
 {
 	bool found;
+	NonDurableTxnEntry *entry;
 
 	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_ENTER, &found);
 	if (!found)
@@ -3349,7 +3355,7 @@ insert_into_non_durable_txn_hash(NonDurableTxnKey *key, NonDurableTxnEntry *entr
 }
 
 bool
-lookup_non_durable_txn_hash(NonDurableTxnKey *key)
+lookup_non_durable_txn(NonDurableTxnKey *key)
 {
 	NonDurableTxnEntry *entry;
 

@@ -1297,6 +1297,9 @@ RecordTransactionCommit(void)
 	bool 		should_wait = false;
 	XLogRecPtr 	remoteFlushLSN;
 	XLogRecPtr	maxLSN = GetCurrentSnapshotLSN();
+	NonDurableTxnKey *key = NULL;
+
+	key = (NonDurableTxnKey *) palloc(sizeof(NonDurableTxnKey));
 
 	/*
 	 * Log pending invalidations for logical decoding of in-progress
@@ -1530,8 +1533,14 @@ RecordTransactionCommit(void)
 		
 		//EDXXX: Code is repetitive, but keeping it to maintain if structure
 		if (markXidCommitted)
+		{
 			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
-			//TransactionIdAsyncCommitTree(xid, nchildren, children, XactLastRecEnd);
+			key->xid = xid;
+			key->commit_lsn = XactLastRecEnd;
+			insert_into_non_durable_txn_htable(key);
+			bool f = lookup_non_durable_txn(key);
+			elog(INFO, "EdLsnTracking: Lookup for xid %u returned %d", key->xid, f);
+		}
 	}
 
 	/*
