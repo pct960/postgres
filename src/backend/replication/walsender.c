@@ -265,8 +265,8 @@ static bool TransactionIdInRecentPast(TransactionId xid, uint32 epoch);
 static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
-static uint32 hash_non_durable_txn(const NonDurableTxnKey *key);
-static bool match_non_durable_txn_hash(const NonDurableTxnKey *key1, const NonDurableTxnKey *key2);
+static uint32 hash_non_durable_txn(const void *key, Size keysize);
+static int match_non_durable_txn_hash(const void *key1, const void *key2, Size keysize);
 
 /* Initialize walsender process before entering the main command loop */
 void
@@ -3319,28 +3319,32 @@ WalSndShmemInit(void)
 									  size/2,
 									  size,
 									  &hctl,
-									  HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
+									  HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
 }
 
 static uint32
-hash_non_durable_txn(const NonDurableTxnKey *key)
+hash_non_durable_txn(const void *key, Size keysize)
 {
-	uint32 hash1 = hash_uint32((uint32) key->xid);
-    uint32 hash2 = hash_uint32((uint32) (key->commit_lsn));
+	const NonDurableTxnKey *k = (const NonDurableTxnKey *) key;
+	uint32 hash1 = hash_uint32((uint32) k->xid);
+    uint32 hash2 = hash_uint32((uint32) (k->commit_lsn));
 
-	return hash1 ^ hash2;
+	return DatumGetUInt32(hash1 ^ hash2);
 }
 
-static bool
-match_non_durable_txn_hash(const NonDurableTxnKey *key1, const NonDurableTxnKey *key2)
+static int 
+match_non_durable_txn_hash(const void *key1, const void *key2, Size keysize)
 {
-	if (key1->xid != InvalidTransactionId && key2->xid != InvalidTransactionId)
-		return key1->xid == key2->xid;
+	const NonDurableTxnKey *k1 = (const NonDurableTxnKey *) key1;
+	const NonDurableTxnKey *k2 = (const NonDurableTxnKey *) key2;
+
+	if (k1->xid != InvalidTransactionId && k2->xid != InvalidTransactionId)
+		return k1->xid == k2->xid ? 0 : 1;
 	
-	if (key1->commit_lsn != InvalidXLogRecPtr && key2->commit_lsn != InvalidXLogRecPtr)
-		return key1->commit_lsn == key2->commit_lsn;
+	if (k1->commit_lsn != InvalidXLogRecPtr && k2->commit_lsn != InvalidXLogRecPtr)
+		return k1->commit_lsn == k2->commit_lsn ? 0 : 1;
 	
-	return false;
+	return 1;
 }
 
 void
@@ -3358,9 +3362,10 @@ bool
 lookup_non_durable_txn(NonDurableTxnKey *key)
 {
 	NonDurableTxnEntry *entry;
+	bool found = false;
 
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_FIND, NULL);
-	return entry != NULL;
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_FIND, &found);
+	return found;
 }
 
 /*
