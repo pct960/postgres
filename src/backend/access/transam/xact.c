@@ -1297,9 +1297,10 @@ RecordTransactionCommit(void)
 	bool 		should_wait = false;
 	XLogRecPtr 	remoteFlushLSN;
 	XLogRecPtr	maxLSN = GetCurrentSnapshotLSN();
-	NonDurableTxnKey *key = NULL;
-
-	key = (NonDurableTxnKey *) palloc(sizeof(NonDurableTxnKey));
+	bool		read_xid_found = false;
+	ListCell   *cell;
+	TransactionId read_xid = InvalidTransactionId;
+	NonDurableTxnEntry *entry = NULL;
 
 	/*
 	 * Log pending invalidations for logical decoding of in-progress
@@ -1366,16 +1367,25 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			ListCell   *cell;
-
+			/* TODO: Acquire a proper lock here */
 			foreach(cell, read_xid_list)
-				elog(INFO, "EdLsnTracking: Read from xid %u", lfirst(cell));
+			{
+				entry = NULL;
+				read_xid = lfirst(cell);
+				entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &read_xid, HASH_FIND, &read_xid_found);
+
+				if (read_xid_found)
+				{
+					should_wait = true;
+					break;
+				}
+			}
 
 			if(!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
 				XLogFlush(maxLSN);
 			else
 			{
-				remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
+				//remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
 
 				// EDXXX: The next todo is to only wait for the highest commit lsn we have seen, and not for the 
 				// the highest lsn in the xlog. Yet to think of an efficient way of doing this.
@@ -1389,10 +1399,10 @@ RecordTransactionCommit(void)
 				// This approach, however, is quite inefficient since reads are slowed down by over 50%
 				// (See lsn-tracking branch)
 
-				if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
-					should_wait = true;
-				else if(remoteFlushLSN == 0)
-					should_wait = pg_stat_should_wait();
+				//if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
+				//	should_wait = true;
+				//else if(remoteFlushLSN == 0)
+				//	should_wait = pg_stat_should_wait();
 				
 				if(should_wait)
 					SyncRepWaitForLSN(maxLSN, true);
@@ -1535,11 +1545,7 @@ RecordTransactionCommit(void)
 		if (markXidCommitted)
 		{
 			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
-			key->xid = xid;
-			key->commit_lsn = XactLastRecEnd;
-			insert_into_non_durable_txn_htable(key);
-			bool f = lookup_non_durable_txn(key);
-			elog(INFO, "EdLsnTracking: Lookup for xid %u returned %d", key->xid, f);
+			insert_into_non_durable_txn_htable(xid, XactLastRecEnd);
 		}
 	}
 

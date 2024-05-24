@@ -265,8 +265,8 @@ static bool TransactionIdInRecentPast(TransactionId xid, uint32 epoch);
 static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
-static uint32 hash_non_durable_txn(const void *key, Size keysize);
-static int match_non_durable_txn_hash(const void *key1, const void *key2, Size keysize);
+static uint32 hash_non_durable_txn_key(const void *key, Size keysize);
+static void prune_non_durable_txn_hash_table(XLogRecPtr lsn);
 
 /* Initialize walsender process before entering the main command loop */
 void
@@ -2164,6 +2164,7 @@ ProcessStandbyReplyMessage(void)
 		if (applyLag != -1 || clearLagTimes)
 			walsnd->applyLag = applyLag;
 		walsnd->replyTime = replyTime;
+		prune_non_durable_txn_hash_table(applyPtr);
 		SpinLockRelease(&walsnd->mutex);
 	}
 
@@ -2180,6 +2181,29 @@ ProcessStandbyReplyMessage(void)
 		else
 			PhysicalConfirmReceivedLocation(flushPtr);
 	}
+}
+
+static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
+{
+	HASH_SEQ_STATUS scan_status;
+    NonDurableTxnEntry *entry;
+
+    // Initialise the hash scan
+    hash_seq_init(&scan_status, NonDurableTxnHash);
+
+    // Scan through the hash table
+    while ((entry = (NonDurableTxnEntry *) hash_seq_search(&scan_status)) != NULL)
+    {
+        // Check if the commit_lsn is less than or equal to the given lsn
+        if (entry->commit_lsn <= lsn)
+        {
+            // Remove the entry from the hash table
+            if (hash_search(NonDurableTxnHash, &entry->xid, HASH_REMOVE, NULL) == NULL)
+            {
+                elog(ERROR, "Failed to remove entry from hash table");
+            }
+        }
+    }
 }
 
 /* compute new replication slot xmin horizon if needed */
@@ -3306,65 +3330,53 @@ WalSndShmemInit(void)
 		}
 	}
 
-	size = sizeof(NonDurableTxnEntry) * WalWriterFlushAfter;
+	size = sizeof(TransactionId) * WalWriterFlushAfter;
 
 	memset(&hctl, 0, sizeof(hctl));
-	hctl.keysize = sizeof(NonDurableTxnKey);
-	hctl.entrysize = sizeof(NonDurableTxnEntry);
+	hctl.keysize = sizeof(TransactionId);
+	hctl.entrysize = sizeof(XLogRecPtr);
 	hctl.hcxt = TopMemoryContext;
-	hctl.hash = (HashValueFunc) hash_non_durable_txn;
-	hctl.match = (HashCompareFunc) match_non_durable_txn_hash;
+	hctl.hash = hash_non_durable_txn_key;
 
 	NonDurableTxnHash = ShmemInitHash("NonDurableTxnHash",
 									  size/2,
 									  size,
 									  &hctl,
-									  HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
+									  HASH_ELEM | HASH_CONTEXT | HASH_SHARED_MEM | HASH_FUNCTION);
 }
 
 static uint32
-hash_non_durable_txn(const void *key, Size keysize)
+hash_non_durable_txn_key(const void *key, Size keysize)
 {
-	const NonDurableTxnKey *k = (const NonDurableTxnKey *) key;
-	uint32 hash1 = hash_uint32((uint32) k->xid);
-    uint32 hash2 = hash_uint32((uint32) (k->commit_lsn));
+	Assert(keysize == sizeof(TransactionId));
+	const TransactionId xid = (const TransactionId ) key;
 
-	return DatumGetUInt32(hash1 ^ hash2);
-}
-
-static int 
-match_non_durable_txn_hash(const void *key1, const void *key2, Size keysize)
-{
-	const NonDurableTxnKey *k1 = (const NonDurableTxnKey *) key1;
-	const NonDurableTxnKey *k2 = (const NonDurableTxnKey *) key2;
-
-	if (k1->xid != InvalidTransactionId && k2->xid != InvalidTransactionId)
-		return k1->xid == k2->xid ? 0 : 1;
-	
-	if (k1->commit_lsn != InvalidXLogRecPtr && k2->commit_lsn != InvalidXLogRecPtr)
-		return k1->commit_lsn == k2->commit_lsn ? 0 : 1;
-	
-	return 1;
+	return hash_uint32(xid);
 }
 
 void
-insert_into_non_durable_txn_htable(NonDurableTxnKey *key)
+insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn)
 {
 	bool found;
 	NonDurableTxnEntry *entry;
 
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_ENTER, &found);
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_ENTER, &found);
+
 	if (!found)
-		entry->commit_lsn = key->commit_lsn;
+		entry->commit_lsn = commit_lsn;
 }
 
 bool
-lookup_non_durable_txn(NonDurableTxnKey *key)
+lookup_non_durable_txn(TransactionId xid)
 {
 	NonDurableTxnEntry *entry;
 	bool found = false;
 
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, key, HASH_FIND, &found);
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_FIND, &found);
+
+	if (found)
+		elog(INFO, "Found xid in hash table with LSN = (%d)", entry->commit_lsn);
+
 	return found;
 }
 
