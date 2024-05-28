@@ -2213,7 +2213,7 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
             // Remove the entry from the hash table
             if (hash_search(NonDurableTxnHash, &xid, HASH_REMOVE, NULL) == NULL)
             {
-                elog(INFO, "Failed to remove entry from hash table");
+                elog(ERROR, "Failed to remove entry from hash table");
             }
 			elog(INFO, "Prune: Successfully removed entry from hash table");
         }
