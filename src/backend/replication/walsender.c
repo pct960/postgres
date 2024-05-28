@@ -2164,12 +2164,19 @@ ProcessStandbyReplyMessage(void)
 		if (applyLag != -1 || clearLagTimes)
 			walsnd->applyLag = applyLag;
 		walsnd->replyTime = replyTime;
-		prune_non_durable_txn_hash_table(applyPtr);
 		SpinLockRelease(&walsnd->mutex);
 	}
 
 	if (!am_cascading_walsender)
 		SyncRepReleaseWaiters();
+	
+	/* Prune non durable hash table up to apply_ptr */
+	if (applyPtr != InvalidXLogRecPtr)
+	{
+		LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+		prune_non_durable_txn_hash_table(applyPtr);
+		LWLockRelease(NonDurableTxnHTableLock);
+	}
 
 	/*
 	 * Advance our local xmin horizon when the client confirmed a flush.
@@ -2187,6 +2194,9 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 {
 	HASH_SEQ_STATUS scan_status;
     NonDurableTxnEntry *entry;
+	TransactionId xid = InvalidTransactionId;
+
+	elog(INFO, "Prune: Checking hash table for lsn (%d)", lsn);
 
     // Initialise the hash scan
     hash_seq_init(&scan_status, NonDurableTxnHash);
@@ -2194,14 +2204,18 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
     // Scan through the hash table
     while ((entry = (NonDurableTxnEntry *) hash_seq_search(&scan_status)) != NULL)
     {
+		elog(INFO, "Prune: Current entry's xid =(%d) and lsn = (%d)", entry->xid, entry->commit_lsn);
+		xid = entry->xid;
+
         // Check if the commit_lsn is less than or equal to the given lsn
         if (entry->commit_lsn <= lsn)
         {
             // Remove the entry from the hash table
-            if (hash_search(NonDurableTxnHash, &entry->xid, HASH_REMOVE, NULL) == NULL)
+            if (hash_search(NonDurableTxnHash, &xid, HASH_REMOVE, NULL) == NULL)
             {
-                elog(ERROR, "Failed to remove entry from hash table");
+                elog(INFO, "Failed to remove entry from hash table");
             }
+			elog(INFO, "Prune: Successfully removed entry from hash table");
         }
     }
 }
@@ -3360,24 +3374,32 @@ insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn)
 	bool found;
 	NonDurableTxnEntry *entry;
 
+	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
 	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_ENTER, &found);
 
 	if (!found)
 		entry->commit_lsn = commit_lsn;
+
+	LWLockRelease(NonDurableTxnHTableLock);
 }
 
-bool
-lookup_non_durable_txn(TransactionId xid)
+XLogRecPtr
+lookup_non_durable_txn(TransactionId xid, bool *found)
 {
 	NonDurableTxnEntry *entry;
-	bool found = false;
+	XLogRecPtr commit_lsn = InvalidXLogRecPtr;
 
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_FIND, &found);
+	LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
+	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_FIND, found);
 
-	if (found)
+	if (*found)
+	{
 		elog(INFO, "Found xid in hash table with LSN = (%d)", entry->commit_lsn);
+		commit_lsn = entry->commit_lsn;
+	}
+	LWLockRelease(NonDurableTxnHTableLock);
 
-	return found;
+	return commit_lsn;
 }
 
 /*

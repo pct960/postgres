@@ -130,7 +130,7 @@ extern void replication_scanner_init(const char *query_string);
 extern void replication_scanner_finish(void);
 extern bool replication_scanner_is_replication_command(void);
 extern void insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn);
-extern bool lookup_non_durable_txn(TransactionId xid);
+extern XLogRecPtr lookup_non_durable_txn(TransactionId xid, bool *found);
 
 extern PGDLLIMPORT Node *replication_parse_result;
 

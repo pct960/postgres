@@ -1294,9 +1294,9 @@ RecordTransactionCommit(void)
 	SharedInvalidationMessage *invalMessages = NULL;
 	bool		RelcacheInitFileInval = false;
 	bool		wrote_xlog;
-	bool 		should_wait = false;
 	XLogRecPtr 	remoteFlushLSN;
-	XLogRecPtr	maxLSN = GetCurrentSnapshotLSN();
+	XLogRecPtr	maxLSN = InvalidXLogRecPtr;
+	XLogRecPtr	read_commit_lsn = InvalidXLogRecPtr;
 	bool		read_xid_found = false;
 	ListCell   *cell;
 	TransactionId read_xid = InvalidTransactionId;
@@ -1367,46 +1367,28 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			/* TODO: Acquire a proper lock here */
 			foreach(cell, read_xid_list)
 			{
-				entry = NULL;
+				read_xid_found = false;
 				read_xid = lfirst(cell);
-				entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &read_xid, HASH_FIND, &read_xid_found);
+				elog(INFO, "Read from xid %u", read_xid);
+				read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
 				if (read_xid_found)
 				{
-					should_wait = true;
-					break;
+					elog(INFO, "Found entry in hash table for xid %u", read_xid);
+					if (read_commit_lsn > maxLSN)
+						maxLSN = read_commit_lsn;
 				}
 			}
 
-			if(!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
+			if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined 
+				&& maxLSN != InvalidXLogRecPtr)
 				XLogFlush(maxLSN);
 			else
 			{
-				//remoteFlushLSN = ((volatile WalSndCtlData *) WalSndCtl)->lsn[Min(synchronous_commit, SYNC_REP_WAIT_APPLY)];
-
-				// EDXXX: The next todo is to only wait for the highest commit lsn we have seen, and not for the 
-				// the highest lsn in the xlog. Yet to think of an efficient way of doing this.
-				// Inefficient strategy:
-				// 1. Since all transactions now have their commit lsn recorded, we can use TransactionIdGetCommitLSN
-				// 2. For every tuple a transaction reads, get the commit lsn of the xmin and compare it with the 
-				// snapshot's current max lsn. Update if needed.
-				// 3. At commit time, the max lsn value is the value we need to wait for.
-				// 4. Use snapshot's max lsn to wait.
-				//
-				// This approach, however, is quite inefficient since reads are slowed down by over 50%
-				// (See lsn-tracking branch)
-
-				//if(maxLSN > remoteFlushLSN && remoteFlushLSN > 0)
-				//	should_wait = true;
-				//else if(remoteFlushLSN == 0)
-				//	should_wait = pg_stat_should_wait();
-				
-				if(should_wait)
+				if (maxLSN != InvalidXLogRecPtr)
 					SyncRepWaitForLSN(maxLSN, true);
-					
 			}
 		}
 		if (!wrote_xlog)
