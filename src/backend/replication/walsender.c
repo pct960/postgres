@@ -2196,15 +2196,12 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
     NonDurableTxnEntry *entry;
 	TransactionId xid = InvalidTransactionId;
 
-	elog(INFO, "Prune: Checking hash table for lsn (%d)", lsn);
-
     // Initialise the hash scan
     hash_seq_init(&scan_status, NonDurableTxnHash);
 
     // Scan through the hash table
     while ((entry = (NonDurableTxnEntry *) hash_seq_search(&scan_status)) != NULL)
     {
-		elog(INFO, "Prune: Current entry's xid =(%d) and lsn = (%d)", entry->xid, entry->commit_lsn);
 		xid = entry->xid;
 
         // Check if the commit_lsn is less than or equal to the given lsn
@@ -2215,7 +2212,6 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
             {
                 elog(ERROR, "Failed to remove entry from hash table");
             }
-			elog(INFO, "Prune: Successfully removed entry from hash table");
         }
     }
 }

@@ -1371,12 +1371,10 @@ RecordTransactionCommit(void)
 			{
 				read_xid_found = false;
 				read_xid = lfirst(cell);
-				elog(INFO, "Read from xid %u", read_xid);
 				read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
 				if (read_xid_found)
 				{
-					elog(INFO, "Found entry in hash table for xid %u", read_xid);
 					if (read_commit_lsn > maxLSN)
 						maxLSN = read_commit_lsn;
 				}
