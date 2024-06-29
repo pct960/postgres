@@ -217,7 +217,6 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 #define TUPLOCK_from_mxstatus(status) \
 			(MultiXactStatusLock[(status)])
 
-List *read_xid_list = NIL;
 /* ----------------------------------------------------------------
  *						 heap support routines
  * ----------------------------------------------------------------

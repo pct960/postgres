@@ -115,6 +115,7 @@ WalSndCtlData *WalSndCtl = NULL;
 WalSnd	   *MyWalSnd = NULL;
 
 HTAB *NonDurableTxnHash = NULL;
+HTAB *ReadXidHash = NULL;
 
 /* Global state */
 bool		am_walsender = false;	/* Am I a walsender process? */
@@ -266,6 +267,7 @@ static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
 static uint32 hash_non_durable_txn_key(const void *key, Size keysize);
+static uint32 hash_read_xid_key(const void *key, Size keysize);
 static void prune_non_durable_txn_hash_table(XLogRecPtr lsn);
 
 /* Initialize walsender process before entering the main command loop */
@@ -3320,6 +3322,7 @@ WalSndShmemInit(void)
 	int			i;
 	HASHCTL		hctl;
 	long		size;
+	Size		read_xid_htable_size;
 
 	WalSndCtl = (WalSndCtlData *)
 		ShmemInitStruct("Wal Sender Ctl", WalSndShmemSize(), &found);
@@ -3340,11 +3343,12 @@ WalSndShmemInit(void)
 		}
 	}
 
-	size = sizeof(TransactionId) * WalWriterFlushAfter;
+	/* EDXXX: Fix this! */
+	size = sizeof(NonDurableTxnEntry) * WalWriterFlushAfter;
 
 	memset(&hctl, 0, sizeof(hctl));
 	hctl.keysize = sizeof(TransactionId);
-	hctl.entrysize = sizeof(XLogRecPtr);
+	hctl.entrysize = sizeof(NonDurableTxnEntry);
 	hctl.hcxt = TopMemoryContext;
 	hctl.hash = hash_non_durable_txn_key;
 
@@ -3353,6 +3357,23 @@ WalSndShmemInit(void)
 									  size,
 									  &hctl,
 									  HASH_ELEM | HASH_CONTEXT | HASH_SHARED_MEM | HASH_FUNCTION);
+
+	/* EDXXX: Fix this! */
+	// non_durable_txn_size = offsetof(ReadXidEntry, read_xid_list);
+	// non_durable_txn_size = add_size(non_durable_txn_size, WalWriterFlushAfter * sizeof(ReadXidEntry));
+	read_xid_htable_size = mul_size(sizeof(ReadXidEntry), WalWriterFlushAfter);
+
+	memset(&hctl, 0, sizeof(hctl));
+	hctl.keysize = sizeof(BackendId);
+	hctl.entrysize = sizeof(ReadXidEntry);
+	hctl.hash = hash_read_xid_key;
+
+	ReadXidHash	= ShmemInitHash("ReadXidHash",
+								read_xid_htable_size/2,
+								read_xid_htable_size,
+								&hctl,
+								HASH_ELEM | HASH_SHARED_MEM | HASH_FUNCTION);
+	
 }
 
 static uint32
@@ -3362,6 +3383,15 @@ hash_non_durable_txn_key(const void *key, Size keysize)
 	const TransactionId xid = (const TransactionId ) key;
 
 	return hash_uint32(xid);
+}
+
+static uint32
+hash_read_xid_key(const void *key, Size keysize)
+{
+	Assert(keysize == sizeof(TransactionId));
+	const BackendId backend_id = (const BackendId) key;
+
+	return hash_uint32(backend_id);
 }
 
 void
@@ -3396,6 +3426,52 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
 	LWLockRelease(NonDurableTxnHTableLock);
 
 	return commit_lsn;
+}
+
+void
+insert_into_read_xid_htable(BackendId read_txn_bid, TransactionId read_from_xid)
+{
+	bool found;
+	ReadXidEntry *entry;
+
+	LWLockAcquire(ReadXidHTableLock, LW_EXCLUSIVE);
+	entry = (ReadXidEntry *) hash_search(ReadXidHash, &read_txn_bid, HASH_ENTER, &found);
+
+	if (!found)
+		entry->n_xids = 0;
+	else
+	{
+		/* Add only unique elements to the read_xid_list */
+		int xid_count = entry->n_xids;
+
+		for (int i = 0; i < xid_count; i++)
+		{
+			if (entry->read_xid_list[i] == read_from_xid)
+			{
+				LWLockRelease(ReadXidHTableLock);
+				return;
+			}
+		}
+		entry->read_xid_list[entry->n_xids] = read_from_xid;
+		entry->n_xids++;
+	}
+
+	LWLockRelease(ReadXidHTableLock);
+}
+
+void
+delete_from_read_xid_htable(BackendId read_txn_bid)
+{
+	ReadXidEntry *entry;
+	bool found = false;
+
+	LWLockAcquire(ReadXidHTableLock, LW_EXCLUSIVE);
+	entry = (ReadXidEntry *) hash_search(ReadXidHash, &read_txn_bid, HASH_FIND, &found);
+
+	if (found)
+		hash_search(ReadXidHash, &read_txn_bid, HASH_REMOVE, NULL);
+
+	LWLockRelease(ReadXidHTableLock);
 }
 
 /*

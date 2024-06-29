@@ -115,8 +115,6 @@ typedef enum
  */
 #define HeapScanIsValid(scan) PointerIsValid(scan)
 
-extern List *read_xid_list;
-
 extern TableScanDesc heap_beginscan(Relation relation, Snapshot snapshot,
 									int nkeys, ScanKey key,
 									ParallelTableScanDesc parallel_scan,

@@ -1001,7 +1001,6 @@ exec_simple_query(const char *query_string)
 	bool		use_implicit_block;
 	char		msec_str[32];
 
-	read_xid_list = NIL;
 
 	/*
 	 * Report query to various monitoring facilities.

@@ -72,8 +72,10 @@
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "nodes/pg_list.h"
+#include "replication/walsender.h"
 #include "storage/bufmgr.h"
 #include "storage/procarray.h"
+#include "storage/proc.h"
 #include "utils/builtins.h"
 #include "utils/combocid.h"
 #include "utils/memutils.h"
@@ -961,13 +963,11 @@ static bool
 HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 					   Buffer buffer)
 {
-	MemoryContext oldContext;
+	BackendId current_backend_id = MyProc->backendId;
 	HeapTupleHeader tuple = htup->t_data;
 
 	Assert(ItemPointerIsValid(&htup->t_self));
 	Assert(htup->t_tableOid != InvalidOid);
-
-	oldContext = MemoryContextSwitchTo(TopMemoryContext);
 
 	if (!HeapTupleHeaderXminCommitted(tuple))
 	{
@@ -1080,13 +1080,13 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 	if (tuple->t_infomask & HEAP_XMAX_INVALID)	/* xid invalid or aborted */
 	{
-		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+		insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
 		return true;
 	}
 
 	if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
 	{
-		read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+		insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
 		return true;
 	}
 
@@ -1129,7 +1129,7 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
-			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+			insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
 			return true;
 		}
 
@@ -1139,7 +1139,7 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 			SetHintBits(tuple, buffer, HEAP_XMAX_INVALID,
 						InvalidTransactionId);
 			
-			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+            insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
 			return true;
 		}
 
@@ -1152,14 +1152,13 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 		/* xmax is committed, but maybe not according to our snapshot */
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
-			read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmin(tuple));
+			insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
 			return true;		/* treat as still in progress */
 		}
 	}
 
 	/* xmax transaction committed */
-	read_xid_list = list_append_unique_int(read_xid_list, HeapTupleHeaderGetRawXmax(tuple));
-	MemoryContextSwitchTo(oldContext);
+	insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmax(tuple));
 	return false;
 }
 

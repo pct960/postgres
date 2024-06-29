@@ -1367,18 +1367,46 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			foreach(cell, read_xid_list)
-			{
-				read_xid_found = false;
-				read_xid = lfirst(cell);
-				read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+			ReadXidEntry *entry;
+			bool found = false;
 
-				if (read_xid_found)
+			LWLockAcquire(ReadXidHTableLock, LW_EXCLUSIVE);
+			entry = (ReadXidEntry *) hash_search(ReadXidHash, MyBackendId, HASH_FIND, &found);
+
+			if (found)
+			{
+				int read_xid_count = entry->n_xids;
+
+				for (int i = 0; i < read_xid_count; i++)
 				{
-					if (read_commit_lsn > maxLSN)
-						maxLSN = read_commit_lsn;
+					elog(INFO, "Read Xid: %d", entry->read_xid_list[i]);
+					read_xid_found = false;
+					read_xid = entry->read_xid_list[i];
+					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+
+					if (read_xid_found)
+					{
+						if (read_commit_lsn > maxLSN)
+							maxLSN = read_commit_lsn;
+					}
 				}
+
 			}
+
+			LWLockRelease(ReadXidHTableLock);
+
+			// foreach(cell, read_xid_list)
+			// {
+			// 	read_xid_found = false;
+			// 	read_xid = lfirst(cell);
+			// 	read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+
+			// 	if (read_xid_found)
+			// 	{
+			// 		if (read_commit_lsn > maxLSN)
+			// 			maxLSN = read_commit_lsn;
+			// 	}
+			// }
 
 			if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined 
 				&& maxLSN != InvalidXLogRecPtr)
@@ -1388,6 +1416,10 @@ RecordTransactionCommit(void)
 				if (maxLSN != InvalidXLogRecPtr)
 					SyncRepWaitForLSN(maxLSN, true);
 			}
+
+			elog(LOG, "In xact.c, pid = (%d)", MyProc->backendId);
+
+			delete_from_read_xid_htable(MyBackendId);
 		}
 		if (!wrote_xlog)
 			goto cleanup;
@@ -1837,6 +1869,8 @@ RecordTransactionAbort(bool isSubXact)
 	 */
 	if (isSubXact)
 		XidCacheRemoveRunningXids(xid, nchildren, children, latestXid);
+	
+	delete_from_read_xid_htable(xid);
 
 	/* Reset XactLastRecEnd until the next transaction writes something */
 	if (!isSubXact)
@@ -2981,11 +3015,6 @@ CleanupTransaction(void)
 void
 StartTransactionCommand(void)
 {
-	MemoryContext oldcontext;
-	oldcontext = MemoryContextSwitchTo(TopTransactionContext);
-	read_xid_list = NIL;
-	MemoryContextSwitchTo(oldcontext);
-
 	TransactionState s = CurrentTransactionState;
 
 	switch (s->blockState)
