@@ -217,6 +217,25 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 #define TUPLOCK_from_mxstatus(status) \
 			(MultiXactStatusLock[(status)])
 
+ReadXidList read_xid_list = {0, {0}};
+
+void
+insert_into_read_xid_list(TransactionId read_from_xid)
+{
+	int i;
+
+	if (read_xid_list.n_xids >= 100)
+		return;
+
+	for (i = 0; i < read_xid_list.n_xids; i++)
+	{
+		if (read_xid_list.xids[i] == read_from_xid)
+			return;
+	}
+	read_xid_list.xids[read_xid_list.n_xids] = read_from_xid;
+	read_xid_list.n_xids++;
+}
+
 /* ----------------------------------------------------------------
  *						 heap support routines
  * ----------------------------------------------------------------

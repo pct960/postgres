@@ -100,6 +100,13 @@ typedef enum
 	HEAPTUPLE_DELETE_IN_PROGRESS	/* deleting xact is still in progress */
 } HTSV_Result;
 
+typedef struct ReadXidList
+{
+	int n_xids;
+	// EDXXX: Read from GUC?
+	TransactionId xids[100];
+} ReadXidList;
+
 /* ----------------
  *		function prototypes for heap access method
  *
@@ -114,6 +121,9 @@ typedef enum
  *		True iff the heap scan is valid.
  */
 #define HeapScanIsValid(scan) PointerIsValid(scan)
+
+extern ReadXidList read_xid_list;
+extern void insert_into_read_xid_list(TransactionId xid);
 
 extern TableScanDesc heap_beginscan(Relation relation, Snapshot snapshot,
 									int nkeys, ScanKey key,

@@ -33,14 +33,6 @@ typedef struct NonDurableTxnEntry
 
 extern HTAB *NonDurableTxnHash;
 
-typedef struct ReadXidEntry
-{
-	int n_xids;
-	TransactionId read_xid_list[FLEXIBLE_ARRAY_MEMBER];
-} ReadXidEntry;
-
-extern HTAB *ReadXidHash;
-
 /* global state */
 extern PGDLLIMPORT bool am_walsender;
 extern PGDLLIMPORT bool am_cascading_walsender;
@@ -69,8 +61,6 @@ extern XLogRecPtr getMinSentLSN();
 
 extern void insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn);
 extern XLogRecPtr lookup_non_durable_txn(TransactionId xid, bool *found);
-extern void insert_into_read_xid_htable(BackendId read_txn_bid, TransactionId read_from_xid);
-extern void delete_from_read_xid_htable(BackendId read_txn_bid);
 
 /*
  * Remember that we want to wakeup walsenders later

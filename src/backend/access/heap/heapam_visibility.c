@@ -963,7 +963,6 @@ static bool
 HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 					   Buffer buffer)
 {
-	BackendId current_backend_id = MyProc->backendId;
 	HeapTupleHeader tuple = htup->t_data;
 
 	Assert(ItemPointerIsValid(&htup->t_self));
@@ -1080,13 +1079,13 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 	if (tuple->t_infomask & HEAP_XMAX_INVALID)	/* xid invalid or aborted */
 	{
-		insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
+		insert_into_read_xid_list(HeapTupleHeaderGetRawXmin(tuple));
 		return true;
 	}
 
 	if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
 	{
-		insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
+		insert_into_read_xid_list(HeapTupleHeaderGetRawXmin(tuple));
 		return true;
 	}
 
@@ -1129,7 +1128,7 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
-			insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
+			insert_into_read_xid_list(HeapTupleHeaderGetRawXmin(tuple));
 			return true;
 		}
 
@@ -1139,7 +1138,7 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 			SetHintBits(tuple, buffer, HEAP_XMAX_INVALID,
 						InvalidTransactionId);
 			
-            insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
+            insert_into_read_xid_list(HeapTupleHeaderGetRawXmin(tuple));
 			return true;
 		}
 
@@ -1152,13 +1151,13 @@ HeapTupleSatisfiesMVCC(HeapTuple htup, Snapshot snapshot,
 		/* xmax is committed, but maybe not according to our snapshot */
 		if (XidInMVCCSnapshot(HeapTupleHeaderGetRawXmax(tuple), snapshot))
 		{
-			insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmin(tuple));
+			insert_into_read_xid_list(HeapTupleHeaderGetRawXmin(tuple));
 			return true;		/* treat as still in progress */
 		}
 	}
 
 	/* xmax transaction committed */
-	insert_into_read_xid_htable(current_backend_id, HeapTupleHeaderGetRawXmax(tuple));
+	insert_into_read_xid_list(HeapTupleHeaderGetRawXmax(tuple));
 	return false;
 }
 

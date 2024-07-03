@@ -1367,46 +1367,19 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			ReadXidEntry *entry;
-			bool found = false;
-
-			LWLockAcquire(ReadXidHTableLock, LW_EXCLUSIVE);
-			entry = (ReadXidEntry *) hash_search(ReadXidHash, MyBackendId, HASH_FIND, &found);
-
-			if (found)
+			int i;
+			for (i = 0; i < read_xid_list.n_xids; i++)
 			{
-				int read_xid_count = entry->n_xids;
+				read_xid_found = false;
+				read_xid = read_xid_list.xids[i];
+				read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
-				for (int i = 0; i < read_xid_count; i++)
+				if (read_xid_found)
 				{
-					elog(INFO, "Read Xid: %d", entry->read_xid_list[i]);
-					read_xid_found = false;
-					read_xid = entry->read_xid_list[i];
-					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
-
-					if (read_xid_found)
-					{
-						if (read_commit_lsn > maxLSN)
-							maxLSN = read_commit_lsn;
-					}
+					if (read_commit_lsn > maxLSN)
+						maxLSN = read_commit_lsn;
 				}
-
 			}
-
-			LWLockRelease(ReadXidHTableLock);
-
-			// foreach(cell, read_xid_list)
-			// {
-			// 	read_xid_found = false;
-			// 	read_xid = lfirst(cell);
-			// 	read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
-
-			// 	if (read_xid_found)
-			// 	{
-			// 		if (read_commit_lsn > maxLSN)
-			// 			maxLSN = read_commit_lsn;
-			// 	}
-			// }
 
 			if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined 
 				&& maxLSN != InvalidXLogRecPtr)
@@ -1416,10 +1389,9 @@ RecordTransactionCommit(void)
 				if (maxLSN != InvalidXLogRecPtr)
 					SyncRepWaitForLSN(maxLSN, true);
 			}
-
-			elog(LOG, "In xact.c, pid = (%d)", MyProc->backendId);
-
-			delete_from_read_xid_htable(MyBackendId);
+			
+			/* Clear the read xid list after having waited */
+			read_xid_list = (ReadXidList){0, {0}};
 		}
 		if (!wrote_xlog)
 			goto cleanup;
@@ -1870,8 +1842,6 @@ RecordTransactionAbort(bool isSubXact)
 	if (isSubXact)
 		XidCacheRemoveRunningXids(xid, nchildren, children, latestXid);
 	
-	delete_from_read_xid_htable(xid);
-
 	/* Reset XactLastRecEnd until the next transaction writes something */
 	if (!isSubXact)
 		XactLastRecEnd = 0;
