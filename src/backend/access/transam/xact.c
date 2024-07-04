@@ -1367,19 +1367,25 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			int i;
-			for (i = 0; i < read_xid_list.n_xids; i++)
-			{
-				read_xid_found = false;
-				read_xid = read_xid_list.xids[i];
-				read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+			int read_deps_size = read_xid_list.n_xids;
 
-				if (read_xid_found)
+			if (read_deps_size < 100)
+			{
+				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
-					if (read_commit_lsn > maxLSN)
-						maxLSN = read_commit_lsn;
+					read_xid_found = false;
+					read_xid = read_xid_list.xids[i];
+					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+
+					if (read_xid_found)
+					{
+						if (read_commit_lsn > maxLSN)
+							maxLSN = read_commit_lsn;
+					}
 				}
 			}
+			else
+				maxLSN = GetCurrentSnapshotLSN();
 
 			if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined 
 				&& maxLSN != InvalidXLogRecPtr)

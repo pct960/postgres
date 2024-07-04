@@ -14,6 +14,7 @@
 
 #include <signal.h>
 #include "replication/syncrep.h"
+#include <utils/hsearch.h>
 
 /*
  * What to do with a snapshot in create replication slot command.
