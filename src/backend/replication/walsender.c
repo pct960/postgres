@@ -3393,10 +3393,7 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
 	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_FIND, found);
 
 	if (*found)
-	{
-		elog(INFO, "Found xid in hash table with LSN = (%d)", entry->commit_lsn);
 		commit_lsn = entry->commit_lsn;
-	}
 	LWLockRelease(NonDurableTxnHTableLock);
 
 	return commit_lsn;
