@@ -1294,13 +1294,10 @@ RecordTransactionCommit(void)
 	SharedInvalidationMessage *invalMessages = NULL;
 	bool		RelcacheInitFileInval = false;
 	bool		wrote_xlog;
-	XLogRecPtr 	remoteFlushLSN;
 	XLogRecPtr	maxLSN = InvalidXLogRecPtr;
 	XLogRecPtr	read_commit_lsn = InvalidXLogRecPtr;
 	bool		read_xid_found = false;
-	ListCell   *cell;
 	TransactionId read_xid = InvalidTransactionId;
-	NonDurableTxnEntry *entry = NULL;
 
 	/*
 	 * Log pending invalidations for logical decoding of in-progress
@@ -1369,18 +1366,27 @@ RecordTransactionCommit(void)
 		{
 			int read_deps_size = read_xid_list.n_xids;
 
-			if (read_deps_size < 100)
+			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && hash_get_num_entries(NonDurableTxnHTable) <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
 			{
 				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
 					read_xid_found = false;
+					read_commit_lsn = InvalidXLogRecPtr;
 					read_xid = read_xid_list.xids[i];
+					elog(INFO, "searching for xid (%u)", read_xid);
 					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
 					if (read_xid_found)
 					{
 						if (read_commit_lsn > maxLSN)
+						{
+							elog(INFO, "found xid. updated maxLSN to (%d)", read_commit_lsn);
 							maxLSN = read_commit_lsn;
+						}
+					}
+					else
+					{
+						elog(INFO, "xid (%u) not found in hash table", read_xid);
 					}
 				}
 			}

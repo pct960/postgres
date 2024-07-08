@@ -36,6 +36,7 @@
 #define HEAP_INSERT_FROZEN		TABLE_INSERT_FROZEN
 #define HEAP_INSERT_NO_LOGICAL	TABLE_INSERT_NO_LOGICAL
 #define HEAP_INSERT_SPECULATIVE 0x0010
+#define MAX_READ_XID_TRACK_SIZE 1024
 
 typedef struct BulkInsertStateData *BulkInsertState;
 struct TupleTableSlot;
@@ -103,8 +104,7 @@ typedef enum
 typedef struct ReadXidList
 {
 	int n_xids;
-	// EDXXX: Read from GUC?
-	TransactionId xids[100];
+	TransactionId xids[MAX_READ_XID_TRACK_SIZE];
 } ReadXidList;
 
 /* ----------------

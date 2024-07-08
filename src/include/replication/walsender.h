@@ -26,13 +26,14 @@ typedef enum
 	CRS_USE_SNAPSHOT
 } CRSSnapshotAction;
 
-typedef struct NonDurableTxnEntry
+typedef struct NonDurableTxnHTableEntry
 {
 	TransactionId 	xid;
 	XLogRecPtr		commit_lsn;
-} NonDurableTxnEntry;
+} NonDurableTxnHTableEntry;
 
-extern HTAB *NonDurableTxnHash;
+extern HTAB	*NonDurableTxnHTable;
+#define MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE 1024
 
 /* global state */
 extern PGDLLIMPORT bool am_walsender;

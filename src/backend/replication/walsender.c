@@ -114,8 +114,7 @@ WalSndCtlData *WalSndCtl = NULL;
 /* My slot in the shared memory array */
 WalSnd	   *MyWalSnd = NULL;
 
-HTAB *NonDurableTxnHash = NULL;
-HTAB *ReadXidHash = NULL;
+HTAB *NonDurableTxnHTable = NULL;
 
 /* Global state */
 bool		am_walsender = false;	/* Am I a walsender process? */
@@ -267,7 +266,6 @@ static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
 static uint32 hash_non_durable_txn_key(const void *key, Size keysize);
-static uint32 hash_read_xid_key(const void *key, Size keysize);
 static void prune_non_durable_txn_hash_table(XLogRecPtr lsn);
 
 /* Initialize walsender process before entering the main command loop */
@@ -2174,11 +2172,7 @@ ProcessStandbyReplyMessage(void)
 	
 	/* Prune non durable hash table up to apply_ptr */
 	if (applyPtr != InvalidXLogRecPtr)
-	{
-		LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
 		prune_non_durable_txn_hash_table(applyPtr);
-		LWLockRelease(NonDurableTxnHTableLock);
-	}
 
 	/*
 	 * Advance our local xmin horizon when the client confirmed a flush.
@@ -2192,31 +2186,6 @@ ProcessStandbyReplyMessage(void)
 	}
 }
 
-static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
-{
-	HASH_SEQ_STATUS scan_status;
-    NonDurableTxnEntry *entry;
-	TransactionId xid = InvalidTransactionId;
-
-    // Initialise the hash scan
-    hash_seq_init(&scan_status, NonDurableTxnHash);
-
-    // Scan through the hash table
-    while ((entry = (NonDurableTxnEntry *) hash_seq_search(&scan_status)) != NULL)
-    {
-		xid = entry->xid;
-
-        // Check if the commit_lsn is less than or equal to the given lsn
-        if (entry->commit_lsn <= lsn)
-        {
-            // Remove the entry from the hash table
-            if (hash_search(NonDurableTxnHash, &xid, HASH_REMOVE, NULL) == NULL)
-            {
-                elog(ERROR, "Failed to remove entry from hash table");
-            }
-        }
-    }
-}
 
 /* compute new replication slot xmin horizon if needed */
 static void
@@ -3322,7 +3291,6 @@ WalSndShmemInit(void)
 	int			i;
 	HASHCTL		hctl;
 	long		size;
-	Size		read_xid_htable_size;
 
 	WalSndCtl = (WalSndCtlData *)
 		ShmemInitStruct("Wal Sender Ctl", WalSndShmemSize(), &found);
@@ -3343,20 +3311,18 @@ WalSndShmemInit(void)
 		}
 	}
 
-	/* EDXXX: Fix this! */
-	size = sizeof(NonDurableTxnEntry) * WalWriterFlushAfter;
-
 	memset(&hctl, 0, sizeof(hctl));
+	
+	size = sizeof(NonDurableTxnHTableEntry) * MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE;
 	hctl.keysize = sizeof(TransactionId);
-	hctl.entrysize = sizeof(NonDurableTxnEntry);
-	hctl.hcxt = TopMemoryContext;
+	hctl.entrysize = sizeof(NonDurableTxnHTableEntry);
 	hctl.hash = hash_non_durable_txn_key;
 
-	NonDurableTxnHash = ShmemInitHash("NonDurableTxnHash",
-									  size/2,
-									  size,
-									  &hctl,
-									  HASH_ELEM | HASH_CONTEXT | HASH_SHARED_MEM | HASH_FUNCTION);
+	NonDurableTxnHTable = ShmemInitHash("NonDurableTxnHTable",
+												size/2,
+												size,
+												&hctl,
+												HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 }
 
 static uint32
@@ -3372,31 +3338,68 @@ void
 insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn)
 {
 	bool found;
-	NonDurableTxnEntry *entry;
+	NonDurableTxnHTableEntry *entry;
 
-	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_ENTER, &found);
+ 	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+	if (hash_get_num_entries(NonDurableTxnHTable) >= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
+	{
+		elog(INFO, "Hash table is full, cannot insert entry for xid %u", xid);
+		LWLockRelease(NonDurableTxnHTableLock);
+		return;
+	}
+
+	entry = (NonDurableTxnHTableEntry *) hash_search(NonDurableTxnHTable, &xid, HASH_ENTER, &found);
 
 	if (!found)
+	{	
 		entry->commit_lsn = commit_lsn;
-
+		elog(INFO, "Inserted entry into hash table for xid %u", xid);
+	}
 	LWLockRelease(NonDurableTxnHTableLock);
 }
 
 XLogRecPtr
 lookup_non_durable_txn(TransactionId xid, bool *found)
 {
-	NonDurableTxnEntry *entry;
+	NonDurableTxnHTableEntry *entry;
 	XLogRecPtr commit_lsn = InvalidXLogRecPtr;
 
-	LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
-	entry = (NonDurableTxnEntry *) hash_search(NonDurableTxnHash, &xid, HASH_FIND, found);
+	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+	entry = (NonDurableTxnHTableEntry *) hash_search(NonDurableTxnHTable, &xid, HASH_FIND, found);
 
 	if (*found)
 		commit_lsn = entry->commit_lsn;
+	
 	LWLockRelease(NonDurableTxnHTableLock);
-
 	return commit_lsn;
+}
+
+static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
+{
+	HASH_SEQ_STATUS scan_status;
+    NonDurableTxnHTableEntry *entry;
+
+	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+
+    // Initialise the hash scan
+    hash_seq_init(&scan_status, NonDurableTxnHTable);
+
+    // Scan through the hash table
+    while ((entry = (NonDurableTxnHTableEntry *) hash_seq_search(&scan_status)) != NULL)
+    {
+        if (entry->commit_lsn <= lsn)
+		{
+			if (hash_search(NonDurableTxnHTable, &entry->xid, HASH_REMOVE, NULL) == NULL)
+			{
+				elog(INFO, "Prune: Failed to remove entry for xid %u", entry->xid);
+			}
+			else
+			{
+				elog(INFO, "Prune: Successfully removed entry from hash table for xid %u", entry->xid);
+			}
+		}
+	}
+	LWLockRelease(NonDurableTxnHTableLock);
 }
 
 /*

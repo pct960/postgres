@@ -224,7 +224,7 @@ insert_into_read_xid_list(TransactionId read_from_xid)
 {
 	int i;
 
-	if (read_xid_list.n_xids >= 100)
+	if (read_xid_list.n_xids >= MAX_READ_XID_TRACK_SIZE)
 		return;
 
 	for (i = 0; i < read_xid_list.n_xids; i++)
