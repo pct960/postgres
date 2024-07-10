@@ -3322,7 +3322,7 @@ WalSndShmemInit(void)
 												size/2,
 												size,
 												&hctl,
-												HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+												HASH_ELEM | HASH_FUNCTION | HASH_PARTITION);
 }
 
 static uint32
@@ -3364,7 +3364,7 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
 	NonDurableTxnHTableEntry *entry;
 	XLogRecPtr commit_lsn = InvalidXLogRecPtr;
 
-	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+	LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
 	entry = (NonDurableTxnHTableEntry *) hash_search(NonDurableTxnHTable, &xid, HASH_FIND, found);
 
 	if (*found)
