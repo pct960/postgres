@@ -1366,7 +1366,7 @@ RecordTransactionCommit(void)
 		{
 			int read_deps_size = read_xid_list.n_xids;
 
-			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && hash_get_num_entries(NonDurableTxnHTable) <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
+			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && non_durable_txn_htable->num_entries <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
 			{
 				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
