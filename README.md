@@ -32,34 +32,45 @@ latencies while managing durability risks.
 
 Simply run:
 ```
-./configure
+./configure --prefix=<INSTALL_DIR>
 make && make install
 ```
+where `<INSTALL_DIR>` is where you want the PosgreSQL binaries to be installed.
+
+## Configuration
+The scripts included in the `ed-tests` directory of this repository can be used to reproduce the results shown in the paper. 
+All tests need one `PRIMARY` instance, one `STANDBY` instance, and a test client.
+These can run on separate servers, or on the same server for local testing.
+At least five compute nodes are needed to fully 
+reproduce all results.
+
+Before running any tests, edit `vars.txt` to define your testing configuration.
+Use `primary` and `standby` to specify the IP addresses of your primary and standby nodes.   For local testing,
+set `primary` and `standby` to 'localhost'.
+Use `primary_db` and `standby_db` to specify the names of the directories that will hold the primary
+and standby databases.
+Finally, set `pg_test_bin` to `<INSTALL_DIR>/bin` to identify the PostgresSQL installation you want to test.
+
+Instead of editing `vars.txt`, you can also provide the necessary configuration information by setting
+the environment variables `PRIMARY`, `STANDBY`, `PRIMARY_DB`, `STANDBY_DB`, and `PG_TEST_BIN`.
 
 ## Running tests
-The scripts included in the `ed-tests` directory of this repository can be used to reproduce the results shown in the paper. 
-All tests need one `PRIMARY` node, one `STANDBY` node and a test client. At least five compute nodes are needed to fully 
-reproduce all results. The specific setups are described in the respective test descriptions below. Use the `vars.txt` 
-file to specify `PRIMARY` and `STANDBY` node IP addresses. The telegram alerting variables are optional. Once the IP
-addresses are filled in, run:
+
+Once configuration has been completed, run:
 ```
-source vars.sh
-```
-Once the variables have been sourced, run:
-```
-# On the primary
+# On the primary node
 ./primary-reinit.sh 
 ```
-And on the standby,
+and
 ```
+# On the standby node
 ./standby-reinit.sh
 ```
 The cluster is configured, by default, to use synchronous streaming replication with the 'serializable' isolation level
-and `synchronous_commit=on`. To run tag transactions as 'fast' or to run async transactions in baseline PG, uncomment this
-line in `primary-reinit.sh':
+and `synchronous_commit=on`. To run tag transactions as 'fast' or to run async transactions in baseline PG, uncomment this line in `primary-reinit.sh':
 
 ```
-#sed -i -e '/synchronous_commit =/ s/= .*/= off/' node-1/postgresql.conf
+#sed -i -e '/synchronous_commit =/ s/= .*/= off/' ${primary_db}/postgresql.conf
 ```
 
 ### Durability costs test

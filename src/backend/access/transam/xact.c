@@ -1296,7 +1296,6 @@ RecordTransactionCommit(void)
 	bool		wrote_xlog;
 	XLogRecPtr	maxLSN = InvalidXLogRecPtr;
 	XLogRecPtr	read_commit_lsn = InvalidXLogRecPtr;
-	bool		read_xid_found = false;
 	TransactionId read_xid = InvalidTransactionId;
 
 	/*
@@ -1366,27 +1365,20 @@ RecordTransactionCommit(void)
 		{
 			int read_deps_size = read_xid_list.n_xids;
 
-			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && non_durable_txn_htable->num_entries <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
+			/* need to add a check that non-durable transaction table has not overflowed */
+			if (read_deps_size < MAX_READ_XID_TRACK_SIZE)
 			{
 				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
-					read_xid_found = false;
-					read_commit_lsn = InvalidXLogRecPtr;
 					read_xid = read_xid_list.xids[i];
-					elog(INFO, "searching for xid (%u)", read_xid);
-					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
+					read_commit_lsn = lookup_non_durable_txn(read_xid);
 
-					if (read_xid_found)
+					/* lookup returns InvalidXLogRecPtr if the lookup fails,
+					 * and maxLSN is initialized to InvalidXLogRecPtr */
+					/* this test relies on InvalidXLogRecPtr being defined to be smaller than any legit lsn */
+					if (read_commit_lsn > maxLSN)
 					{
-						if (read_commit_lsn > maxLSN)
-						{
-							elog(INFO, "found xid. updated maxLSN to (%d)", read_commit_lsn);
-							maxLSN = read_commit_lsn;
-						}
-					}
-					else
-					{
-						elog(INFO, "xid (%u) not found in hash table", read_xid);
+						maxLSN = read_commit_lsn;
 					}
 				}
 			}
@@ -1541,7 +1533,7 @@ RecordTransactionCommit(void)
 		if (markXidCommitted)
 		{
 			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
-			insert_into_non_durable_txn_htable(xid, XactLastRecEnd);
+			insert_non_durable_txn(xid, XactLastRecEnd);
 		}
 	}
 

@@ -1,10 +1,18 @@
 #!/bin/bash
-#sudo pkill -9 postgres
-rm -rf node-2
-pg_basebackup -h localhost -U postgres -p 5432 -D node-2 -Fp -Xs -P -R
-#sed -i '/#hot_standby/s/^#//g' node-2/postgresql.conf
-#sed -i -e "/cluster_name =/ s/= .*/= \\'replica1\\'/" node-2/postgresql.conf
-#sed -i -e "/default_transaction_isolation =/ s/= .*/= \\'read committed\\'/" node-2/postgresql.conf
-cp postgresql.conf.replica1 node-2/postgresql.conf 
-./start node-2
 
+# get configuration variables
+source ./vars.sh
+
+echo "standby: $standby_db at ${standby}/5433"
+
+/bin/rm -rf ${standby_db}
+echo "establishing initial backup"
+${pg_test_bin}/pg_basebackup -h ${primary} -U postgres -p 5432 -D ${standby_db} -Fp -Xs -P -R
+echo "configuring standby server"
+cp postgresql.conf.replica1 ${standby_db}/postgresql.conf
+#sed -i '/#hot_standby/s/^#//g' ${standby_db}/postgresql.conf
+#sed -i -e "/cluster_name =/ s/= .*/= \\'replica1\\'/" ${standby_db}/postgresql.conf
+#sed -i -e "/default_transaction_isolation =/ s/= .*/= \\'read committed\\'/" ${standby_db}/postgresql.conf
+#sed -i '/#port =/ s/#port = .*/port = 5433/' ${standby_db}/postgresql.conf
+echo "launching standby server"
+${pg_test_bin}/pg_ctl -D ${standby_db} start

@@ -11,7 +11,7 @@
  */
 #ifndef _WALSENDER_H
 #define _WALSENDER_H
-#define MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE 512
+#define  NON_DURABLE_TXN_HASH_TABLE_SIZE 512
 
 #include <signal.h>
 #include "replication/syncrep.h"
@@ -36,10 +36,10 @@ typedef struct NonDurableTxnHTableEntry
 typedef struct NonDurableTxnHTable
 {
 	int 	num_entries;
-	NonDurableTxnHTableEntry entries[MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE];
+	NonDurableTxnHTableEntry entries[NON_DURABLE_TXN_HASH_TABLE_SIZE];
 } NonDurableTxnHTable;
 
-extern NonDurableTxnHTable *non_durable_txn_htable;
+extern NonDurableTxnHTable *NonDurableTxns;
 
 /* global state */
 extern PGDLLIMPORT bool am_walsender;
@@ -59,6 +59,7 @@ extern void WalSndErrorCleanup(void);
 extern void WalSndResourceCleanup(bool isCommit);
 extern void WalSndSignals(void);
 extern Size WalSndShmemSize(void);
+extern Size WalSndNonDurableTxnsSize(void);
 extern void WalSndShmemInit(void);
 extern void WalSndWakeup(void);
 extern void WalSndInitStopping(void);
@@ -67,8 +68,8 @@ extern void HandleWalSndInitStopping(void);
 extern void WalSndRqstFileReload(void);
 extern XLogRecPtr getMinSentLSN();
 
-extern void insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn);
-extern XLogRecPtr lookup_non_durable_txn(TransactionId xid, bool *found);
+extern void insert_non_durable_txn(TransactionId xid, XLogRecPtr commit_lsn);
+extern XLogRecPtr lookup_non_durable_txn(TransactionId xid);
 
 /*
  * Remember that we want to wakeup walsenders later
