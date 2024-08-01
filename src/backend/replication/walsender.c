@@ -3330,12 +3330,31 @@ WalSndShmemInit(void)
 	}
 }
 
-void
-insert_non_durable_txn(TransactionId xid, XLogRecPtr commit_lsn)
+/* helper function for insert, and also for re-insertions from pruning */
+/* this assumes that the table is already locked, it is not full, and the xid and commit_lsn are valid */
+static void
+insert_non_durable_txn_helper(TransactionId xid, XLogRecPtr commit_lsn)
 {
 	int insert_index;
 	NonDurableTxnHTableEntry *entry;
 
+	insert_index = hash_uint32(xid) % NON_DURABLE_TXN_HASH_TABLE_SIZE;
+	entry = &(NonDurableTxns->entries[insert_index]);
+
+	while (entry->xid != InvalidTransactionId)
+	{
+		insert_index = (insert_index + 1) % NON_DURABLE_TXN_HASH_TABLE_SIZE;
+		entry = &(NonDurableTxns->entries[insert_index]);
+	}
+
+	entry->xid = xid;
+	entry->commit_lsn = commit_lsn;
+	NonDurableTxns->num_entries++;
+}
+
+void
+insert_non_durable_txn(TransactionId xid, XLogRecPtr commit_lsn)
+{
 	if (xid == InvalidTransactionId) {
 		elog(INFO,"Non-Durable Txn Table: attempt to insert invalid xid");
 		return;
@@ -3351,18 +3370,7 @@ insert_non_durable_txn(TransactionId xid, XLogRecPtr commit_lsn)
 		return;
 	}
 
-	insert_index = hash_uint32(xid) % NON_DURABLE_TXN_HASH_TABLE_SIZE;
-	entry = &(NonDurableTxns->entries[insert_index]);
-
-	while (entry->xid != InvalidTransactionId)
-	{
-		insert_index = (insert_index + 1) % NON_DURABLE_TXN_HASH_TABLE_SIZE;
-		entry = &(NonDurableTxns->entries[insert_index]);
-	}
-
-	entry->xid = xid;
-	entry->commit_lsn = commit_lsn;
-	NonDurableTxns->num_entries++;
+	insert_non_durable_txn_helper(xid, commit_lsn);
 
 	LWLockRelease(NonDurableTxnsLock);
 	elog(INFO,
@@ -3407,10 +3415,18 @@ lookup_non_durable_txn(TransactionId xid)
 
 static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 {
-	int i;
+	int i, xid_hash, reinsertion_count;
 	NonDurableTxnHTableEntry *entry;
+	NonDurableTxnHTableEntry reinsertions[NON_DURABLE_TXN_HASH_TABLE_SIZE];
+	/* pruning statistics */
+	int start_size, end_size;
+	int pruned = 0;
+	int remained = 0;
+	int reinserted = 0;
 
+	reinsertion_count = 0;
 	LWLockAcquire(NonDurableTxnsLock, LW_EXCLUSIVE);
+	start_size = NonDurableTxns->num_entries;
 	for (i = 0; i < NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
 	{
 		entry = &(NonDurableTxns->entries[i]);
@@ -3418,16 +3434,44 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 		if (entry->xid == InvalidTransactionId)
 			continue;
 
-		/* fix this */
 		if (entry->commit_lsn <= lsn)
 		{
-			elog(INFO, "Prune: xid: %u, commit_lsn: %X/%X", entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
 			entry->xid = InvalidTransactionId;
 			entry->commit_lsn = InvalidXLogRecPtr;
-			NonDurableTxns->num_entries--;
+			NonDurableTxns->num_entries += 1;
+			pruned++;
+		} else {
+			/* The entry should not be pruned.  Does it need to be re-inserted? */
+			xid_hash = hash_uint32(entry->xid);
+			if (xid_hash == i) {
+				/* entry is in the right place */
+				remained++;
+				continue;
+			} else {
+				/* entry is not in the right place - remove and add to reinsertion list */
+				reinsertions[reinsertion_count].xid = entry->xid;
+				reinsertions[reinsertion_count].commit_lsn = entry->commit_lsn;
+				reinsertion_count += 1;
+				entry->xid = InvalidTransactionId;
+				entry->commit_lsn = InvalidXLogRecPtr;
+				NonDurableTxns->num_entries -= 1;
+			}
 		}
 	}
+	/* now do reinsertions */
+	reinserted = reinsertion_count;
+	while (reinsertion_count > 0) {
+		insert_non_durable_txn_helper(reinsertions[reinsertion_count-1].xid, reinsertions[reinsertion_count-1].commit_lsn);
+		reinsertion_count -= 1;
+	}
+	end_size = NonDurableTxns->num_entries;
 	LWLockRelease(NonDurableTxnsLock);
+	elog(INFO, "Non-Durable Txn Table Prune: %x -> %x entries, pruned: %x, remained: %x, reinserted: %x",
+		 start_size,
+		 end_size,
+		 pruned,
+		 remained,
+		 reinserted);
 }
 
 /*
