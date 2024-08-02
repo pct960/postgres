@@ -3415,7 +3415,7 @@ lookup_non_durable_txn(TransactionId xid)
 
 static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 {
-	int i, xid_hash, reinsertion_count;
+	int i, xid_index, reinsertion_count;
 	NonDurableTxnHTableEntry *entry;
 	NonDurableTxnHTableEntry reinsertions[NON_DURABLE_TXN_HASH_TABLE_SIZE];
 	/* pruning statistics */
@@ -3423,7 +3423,9 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 	int pruned = 0;
 	int remained = 0;
 	int reinserted = 0;
+	TransactionId max_xid, min_xid;
 
+	max_xid = min_xid = InvalidTransactionId;
 	reinsertion_count = 0;
 	LWLockAcquire(NonDurableTxnsLock, LW_EXCLUSIVE);
 	start_size = NonDurableTxns->num_entries;
@@ -3434,19 +3436,24 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 		if (entry->xid == InvalidTransactionId)
 			continue;
 
+		if (entry->xid > max_xid) max_xid = entry->xid;
+		if (min_xid == InvalidTransactionId) {
+			min_xid = entry->xid;
+		}
+		if (entry->xid < min_xid) min_xid = entry->xid;
+
 		if (entry->commit_lsn <= lsn)
 		{
 			entry->xid = InvalidTransactionId;
 			entry->commit_lsn = InvalidXLogRecPtr;
-			NonDurableTxns->num_entries += 1;
+			NonDurableTxns->num_entries -= 1;
 			pruned++;
 		} else {
 			/* The entry should not be pruned.  Does it need to be re-inserted? */
-			xid_hash = hash_uint32(entry->xid);
-			if (xid_hash == i) {
+			xid_index = hash_uint32(entry->xid) % NON_DURABLE_TXN_HASH_TABLE_SIZE;
+			if (xid_index == i) {
 				/* entry is in the right place */
 				remained++;
-				continue;
 			} else {
 				/* entry is not in the right place - remove and add to reinsertion list */
 				reinsertions[reinsertion_count].xid = entry->xid;
@@ -3466,12 +3473,16 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 	}
 	end_size = NonDurableTxns->num_entries;
 	LWLockRelease(NonDurableTxnsLock);
-	elog(INFO, "Non-Durable Txn Table Prune: %x -> %x entries, pruned: %x, remained: %x, reinserted: %x",
+	elog(INFO, "Non-Durable Txn Table Prune %X/%X: %d -> %d entries, pruned: %d, remained: %d, reinserted: %d, xid range: [%u,%u]",
+		 (uint32)(lsn >> 32),
+		 (uint32)(lsn),
 		 start_size,
 		 end_size,
 		 pruned,
 		 remained,
-		 reinserted);
+		 reinserted,
+		 min_xid,
+		 max_xid);
 }
 
 /*

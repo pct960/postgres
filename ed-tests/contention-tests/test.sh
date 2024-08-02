@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# get configuration variables
+source ../../vars.sh
+
 test_name="contention-tests-128-clients"
 
 # Change to 0.5 for low contention, and 0.95 for 
@@ -20,20 +23,20 @@ txn_type="fast"
 
 clients=128
 threads=16
-duration=120
+duration=10
 
 for rate in ${rates[@]};
 do
-	SECONDS=0
+#	SECONDS=0
     	echo -e "\n\n=================================================Running $test_type/$db_flavour/$txn_type/$rate======================================================\n\n"
     	op_dir="output-logs/paper-exps/$test_name/$test_type/$db_flavour/$txn_type/$rate"
     	mkdir -p $op_dir
-    	ssh -t ubuntu@$PRIMARY 'cd postgres && ./primary-reinit.sh'
-    	ssh -t ubuntu@$STANDBY 'cd postgres && ./standby-reinit.sh'
-    	ssh -t ubuntu@$PRIMARY 'cd postgres && ./create.sh'
-    	pgbench -h $PRIMARY -U postgres postgres -p 5432 -c $clients -j $threads -f update.sql -R $rate -T $duration -D split=$config --max-tries=5 --failures-detailed > $op_dir/out.txt
+#    	ssh -t ubuntu@$PRIMARY 'cd postgres && ./primary-reinit.sh'
+#    	ssh -t ubuntu@$STANDBY 'cd postgres && ./standby-reinit.sh'
+#    	ssh -t ubuntu@$PRIMARY 'cd postgres && ./create.sh'
+    	pgbench -h $primary -U postgres postgres -p 5432 -c $clients -j $threads -f update.sql -R $rate -T $duration -D split=$config --max-tries=5 --failures-detailed > $op_dir/out.txt
     	#mv pgbench_log* $op_dir/
-    	curl -s -X POST $URL -d chat_id=$ID -d text="Completed $txn_type/$config/$rate: Took $SECONDS"
+#    	curl -s -X POST $URL -d chat_id=$ID -d text="Completed $txn_type/$config/$rate: Took $SECONDS"
 done
 
-curl -s -X POST $URL -d chat_id=$ID -d text="All tests done"
+# curl -s -X POST $URL -d chat_id=$ID -d text="All tests done"
