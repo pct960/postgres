@@ -1364,29 +1364,33 @@ RecordTransactionCommit(void)
 		 */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
+			elog(INFO, "(xact.c)looking up read xid table");
+			dump_non_durable_txn_htable();
 			int read_deps_size = read_xid_list.n_xids;
 
 			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && non_durable_txn_htable->num_entries <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
 			{
+				elog(INFO, "(xact.c)read xid table size: %d", read_xid_list.n_xids);
 				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
+					elog(INFO, "(xact.c)reading xid table entry %d: %u", i, read_xid_list.xids[i]);
 					read_xid_found = false;
 					read_commit_lsn = InvalidXLogRecPtr;
 					read_xid = read_xid_list.xids[i];
-					elog(INFO, "searching for xid (%u)", read_xid);
+					elog(INFO, "(xact.c)searching for xid (%u)", read_xid);
 					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
 					if (read_xid_found)
 					{
 						if (read_commit_lsn > maxLSN)
 						{
-							elog(INFO, "found xid. updated maxLSN to (%d)", read_commit_lsn);
+							elog(INFO, "(xact.c)found xid. updated maxLSN to (%d)", read_commit_lsn);
 							maxLSN = read_commit_lsn;
 						}
 					}
 					else
 					{
-						elog(INFO, "xid (%u) not found in hash table", read_xid);
+						elog(INFO, "(xact.c)xid (%u) not found in hash table", read_xid);
 					}
 				}
 			}
@@ -1542,6 +1546,7 @@ RecordTransactionCommit(void)
 		{
 			TransactionIdCommitTree(xid, nchildren, children, XactLastRecEnd);
 			insert_into_non_durable_txn_htable(xid, XactLastRecEnd);
+			dump_non_durable_txn_htable();
 		}
 	}
 

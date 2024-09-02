@@ -67,7 +67,8 @@ extern void HandleWalSndInitStopping(void);
 extern void WalSndRqstFileReload(void);
 extern XLogRecPtr getMinSentLSN();
 
-extern void insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn);
+extern bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn);
+extern void dump_non_durable_txn_htable(void);
 extern XLogRecPtr lookup_non_durable_txn(TransactionId xid, bool *found);
 
 /*
