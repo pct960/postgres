@@ -3311,17 +3311,19 @@ WalSndShmemInit(void)
 		}
 	}
 
-	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
-	non_durable_txn_htable = (NonDurableTxnHTable *) MemoryContextAllocZero(TopMemoryContext, sizeof(NonDurableTxnHTable) * MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE);
-	
-	non_durable_txn_htable->num_entries = 0;
+	non_durable_txn_htable = (NonDurableTxnHTable *) ShmemInitStruct("NonDurableTxnHTable",
+																   sizeof(NonDurableTxnHTable), &found);
 
-	for (int i = 0; i < MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
-	{	
-		non_durable_txn_htable->entries[i].xid = InvalidTransactionId;
-		non_durable_txn_htable->entries[i].commit_lsn = InvalidXLogRecPtr;
+	if (!found)
+	{
+		non_durable_txn_htable->num_entries = 0;
+
+		for (int i = 0; i < MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
+		{	
+			non_durable_txn_htable->entries[i].xid = InvalidTransactionId;
+			non_durable_txn_htable->entries[i].commit_lsn = InvalidXLogRecPtr;
+		}
 	}
-	LWLockRelease(NonDurableTxnHTableLock);
 }
 
 static uint32
@@ -3335,7 +3337,6 @@ hash_non_durable_txn_key(const void *key, Size keysize)
 
 void dump_non_durable_txn_htable(void)
 {
-    MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
     LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
     elog(INFO, "(walsender.c/dump) Dumping non-durable transaction hash table:");
     for (int i = 0; i < MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
@@ -3348,12 +3349,10 @@ void dump_non_durable_txn_htable(void)
     }
     elog(INFO, "(walsender.c/dump) Total entries: %d", non_durable_txn_htable->num_entries);
     LWLockRelease(NonDurableTxnHTableLock);
-    MemoryContextSwitchTo(oldcontext);
 }
 
 bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn)
 {
-	MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
     LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
 
     if (non_durable_txn_htable->num_entries >= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
@@ -3388,14 +3387,12 @@ bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn
 
     LWLockRelease(NonDurableTxnHTableLock);
     elog(INFO, "(walsender.c/insert) Inserted: xid: %u, commit_lsn: %X/%X, insert_index: %d", xid, (uint32) (commit_lsn >> 32), (uint32) commit_lsn, insert_index);
-    MemoryContextSwitchTo(oldcontext);
     return true;
 }
 
 XLogRecPtr
 lookup_non_durable_txn(TransactionId xid, bool *found)
 {
-	MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
     int lookup_index = hash_uint32(xid) % MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE;
     int initial_index = lookup_index;
 	elog(INFO, "(walsender.c/lookup) Lookup: xid: %u, lookup_index: %d", xid, lookup_index);
@@ -3426,33 +3423,58 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
     elog(INFO, "(walsender.c/lookup) Lookup: xid: %u not found", xid);
     *found = false;
     LWLockRelease(NonDurableTxnHTableLock);
-    MemoryContextSwitchTo(oldcontext);
     return InvalidXLogRecPtr;
 }
 
 static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 {
-	MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-	int i;
+    int i, j;
 
-	LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
-	for (i = 0; i < MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
-	{
-		NonDurableTxnHTableEntry *entry = &non_durable_txn_htable->entries[i];
+    LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+    
+    for (i = 0; i < MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE; i++)
+    {
+        NonDurableTxnHTableEntry *entry = &non_durable_txn_htable->entries[i];
+		elog(LOG, "Attempting to prune entry at index (%d) with xid (%u) and commit_lsn (%X/%X)", i, entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
+        
+        if (entry->xid == InvalidTransactionId)
+            continue;
 
-		if (entry->xid == InvalidTransactionId)
-			continue;
-
-		if (entry->commit_lsn <= lsn)
-		{
-			elog(LOG, "(walsender.c/prune) Prune: xid: %u, commit_lsn: %X/%X", entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
-			entry->xid = InvalidTransactionId;
-			entry->commit_lsn = InvalidXLogRecPtr;
-			non_durable_txn_htable->num_entries--;
-		}
-	}
-	LWLockRelease(NonDurableTxnHTableLock);
-	MemoryContextSwitchTo(oldcontext);
+        if (entry->commit_lsn <= lsn)
+        {
+            elog(LOG, "(walsender.c/prune) Prune Success: xid: %u, commit_lsn: %X/%X", 
+                 entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
+            
+            entry->xid = InvalidTransactionId;
+            entry->commit_lsn = InvalidXLogRecPtr;
+            non_durable_txn_htable->num_entries--;
+        }
+        else
+        {
+			/* Our lookup function terminates as soon as it encounters an empty slot.
+			 * So, we need to move entries here so that the lookup succeeds. 
+			 */
+            int desired_index = hash_uint32(entry->xid) % MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE;
+            if (desired_index != i)
+            {
+                for (j = desired_index; j != i; j = (j + 1) % MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
+                {
+                    if (non_durable_txn_htable->entries[j].xid == InvalidTransactionId)
+                    {
+                        // Found an empty slot, move the entry here
+                        non_durable_txn_htable->entries[j] = *entry;
+                        entry->xid = InvalidTransactionId;
+                        entry->commit_lsn = InvalidXLogRecPtr;
+                        elog(LOG, "(walsender.c/prune) Moved entry: xid: %u from %d to %d", 
+                             non_durable_txn_htable->entries[j].xid, i, j);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    LWLockRelease(NonDurableTxnHTableLock);
 }
 
 /*
