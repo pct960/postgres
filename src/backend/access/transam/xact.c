@@ -1368,7 +1368,7 @@ RecordTransactionCommit(void)
 			dump_non_durable_txn_htable();
 			int read_deps_size = read_xid_list.n_xids;
 
-			if (read_deps_size < MAX_READ_XID_TRACK_SIZE && non_durable_txn_htable->num_entries <= MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE)
+			if (read_deps_size < MAX_READ_XID_TRACK_SIZE)
 			{
 				elog(INFO, "(xact.c)read xid table size: %d", read_xid_list.n_xids);
 				for (int i = 0; i < read_xid_list.n_xids; i++)
