@@ -11,7 +11,7 @@
  */
 #ifndef _WALSENDER_H
 #define _WALSENDER_H
-#define MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE 65536
+#define MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE 4096
 
 #include <signal.h>
 #include "replication/syncrep.h"
@@ -33,7 +33,13 @@ typedef struct NonDurableTxnHTableEntry
 	XLogRecPtr		commit_lsn;
 } NonDurableTxnHTableEntry;
 
-extern HTAB *non_durable_txn_htab;
+typedef struct NonDurableTxnHTable
+{
+	XLogRecPtr		overflow_max_lsn;
+	HTAB 			*htab;
+} NonDurableTxnHTable;
+
+extern NonDurableTxnHTable *non_durable_txn_htable;
 
 /* global state */
 extern PGDLLIMPORT bool am_walsender;

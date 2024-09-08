@@ -115,7 +115,7 @@ WalSndCtlData *WalSndCtl = NULL;
 /* My slot in the shared memory array */
 WalSnd	   *MyWalSnd = NULL;
 
-HTAB *non_durable_txn_htab = NULL;
+NonDurableTxnHTable *non_durable_txn_htable = NULL;
 
 /* Global state */
 bool		am_walsender = false;	/* Am I a walsender process? */
@@ -3307,7 +3307,7 @@ WalSndShmemInit(void)
 	bool		found;
 	int			i;
 	HASHCTL		hash_ctl;
-	int 		size;
+	Size		size;
 
 	WalSndCtl = (WalSndCtlData *)
 		ShmemInitStruct("Wal Sender Ctl", WalSndShmemSize(), &found);
@@ -3328,7 +3328,10 @@ WalSndShmemInit(void)
 		}
 	}
 
+	/* === BEGIN: Needs Ken's review === */
 	size = sizeof(NonDurableTxnHTableEntry) * MAX_NON_DURABLE_TXN_HASH_TABLE_SIZE;
+
+	non_durable_txn_htable = (NonDurableTxnHTable *) ShmemInitStruct("NonDurableTxnHashStruct", sizeof(NonDurableTxnHTable), &found);
 
 	MemSet(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(TransactionId);
@@ -3336,11 +3339,13 @@ WalSndShmemInit(void)
 	hash_ctl.hash = hash_non_durable_txn_key;
 	hash_ctl.hcxt = TopMemoryContext;  // This ensures the hash table persists across transactions
 
-	non_durable_txn_htab = ShmemInitHash("NonDurableTxnHash",
-										 size / 2,  // initial size
+	non_durable_txn_htable->htab = ShmemInitHash("NonDurableTxnHashTable",
+										 size/2,  // initial size
 										 size,  // max size
 										 &hash_ctl,
 										 HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	non_durable_txn_htable->overflow_max_lsn = InvalidXLogRecPtr;
 }
 
 void dump_non_durable_txn_htable(void)
@@ -3353,7 +3358,7 @@ void dump_non_durable_txn_htable(void)
     
     elog(INFO, "(walsender.c/dump) Dumping non-durable transaction hash table:");
     
-    hash_seq_init(&status, non_durable_txn_htab);
+    hash_seq_init(&status, non_durable_txn_htable->htab);
     
     while ((entry = (NonDurableTxnHTableEntry *) hash_seq_search(&status)) != NULL)
     {
@@ -3374,15 +3379,15 @@ bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn
 
     LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
 
-    entry = (NonDurableTxnHTableEntry *) hash_search(non_durable_txn_htab,
+    entry = (NonDurableTxnHTableEntry *) hash_search(non_durable_txn_htable->htab,
                                                      &xid,
                                                      HASH_ENTER,
                                                      &found);
 
     if (entry == NULL)
     {
+		non_durable_txn_htable->overflow_max_lsn = Max(non_durable_txn_htable->overflow_max_lsn, commit_lsn);
         LWLockRelease(NonDurableTxnHTableLock);
-        elog(ERROR, "out of memory");
         return false;
     }
 
@@ -3402,7 +3407,7 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
 
     LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
 
-    entry = (NonDurableTxnHTableEntry *) hash_search(non_durable_txn_htab,
+    entry = (NonDurableTxnHTableEntry *) hash_search(non_durable_txn_htable->htab,
                                                      &xid,
                                                      HASH_FIND,
                                                      found);
@@ -3412,10 +3417,10 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
         result = entry->commit_lsn;
         elog(INFO, "(walsender.c/lookup) Found: xid: %u, commit_lsn: %X/%X", xid, (uint32) (result >> 32), (uint32) result);
     }
-    else
-    {
-        elog(INFO, "(walsender.c/lookup) Lookup: xid: %u not found", xid);
-    }
+	else
+	{
+		elog(INFO, "(walsender.c/lookup) Lookup: xid: %u not found", xid);
+	}
 
     LWLockRelease(NonDurableTxnHTableLock);
     return result;
@@ -3428,7 +3433,7 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 
     LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
     
-    hash_seq_init(&status, non_durable_txn_htab);
+    hash_seq_init(&status, non_durable_txn_htable->htab);
 
     while ((entry = (NonDurableTxnHTableEntry *) hash_seq_search(&status)) != NULL)
     {
@@ -3437,13 +3442,20 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
             elog(LOG, "(walsender.c/prune) Prune Success: xid: %u, commit_lsn: %X/%X", 
                  entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
             
-            if (hash_search(non_durable_txn_htab, &entry->xid, HASH_REMOVE, NULL) == NULL)
+            if (hash_search(non_durable_txn_htable->htab, &entry->xid, HASH_REMOVE, NULL) == NULL)
                 elog(ERROR, "hash table corrupted");
         }
     }
+
+	if (non_durable_txn_htable->overflow_max_lsn <= lsn)
+	{
+		non_durable_txn_htable->overflow_max_lsn = InvalidXLogRecPtr;
+	}
     
     LWLockRelease(NonDurableTxnHTableLock);
 }
+/* === END: Needs Ken's review === */
+
 
 /*
  * Wake up all walsenders

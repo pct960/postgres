@@ -217,7 +217,7 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 #define TUPLOCK_from_mxstatus(status) \
 			(MultiXactStatusLock[(status)])
 
-ReadXidList read_xid_list = {0, {0}};
+ReadXidList read_xid_list = {0, false, {0}};
 
 void
 insert_into_read_xid_list(TransactionId read_from_xid)
@@ -226,7 +226,10 @@ insert_into_read_xid_list(TransactionId read_from_xid)
 	int i;
 
 	if (read_xid_list.n_xids >= MAX_READ_XID_TRACK_SIZE)
+	{
+		read_xid_list.overflow = true;
 		return;
+	}
 
 	for (i = 0; i < read_xid_list.n_xids; i++)
 	{

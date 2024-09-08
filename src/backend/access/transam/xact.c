@@ -1296,6 +1296,7 @@ RecordTransactionCommit(void)
 	bool		wrote_xlog;
 	XLogRecPtr	maxLSN = InvalidXLogRecPtr;
 	XLogRecPtr	read_commit_lsn = InvalidXLogRecPtr;
+	XLogRecPtr	snapshot_lsn = GetCurrentSnapshotLSN();
 	bool		read_xid_found = false;
 	TransactionId read_xid = InvalidTransactionId;
 
@@ -1362,13 +1363,14 @@ RecordTransactionCommit(void)
 		 * would.  This will primarily happen for HOT pruning and the like; we
 		 * want these to be flushed to disk in due time.
 		 */
+		
+		/* === BEGIN: Needs Ken's review === */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
 			elog(INFO, "(xact.c)looking up read xid table");
 			dump_non_durable_txn_htable();
-			int read_deps_size = read_xid_list.n_xids;
 
-			if (read_deps_size < MAX_READ_XID_TRACK_SIZE)
+			if (!read_xid_list.overflow)
 			{
 				elog(INFO, "(xact.c)read xid table size: %d", read_xid_list.n_xids);
 				for (int i = 0; i < read_xid_list.n_xids; i++)
@@ -1388,14 +1390,20 @@ RecordTransactionCommit(void)
 							maxLSN = read_commit_lsn;
 						}
 					}
-					else
+					else if (non_durable_txn_htable->overflow_max_lsn != InvalidXLogRecPtr)
 					{
+						maxLSN = Max(maxLSN, non_durable_txn_htable->overflow_max_lsn);
 						elog(INFO, "(xact.c)xid (%u) not found in hash table", read_xid);
 					}
 				}
 			}
+			else if (non_durable_txn_htable->overflow_max_lsn != InvalidXLogRecPtr)
+			{
+				maxLSN = non_durable_txn_htable->overflow_max_lsn;
+				elog(INFO, "(xact.c)overflow maxLSN to (%d)", maxLSN);
+			}
 			else
-				maxLSN = GetCurrentSnapshotLSN();
+				maxLSN = snapshot_lsn;
 
 			if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined 
 				&& maxLSN != InvalidXLogRecPtr)
@@ -1407,8 +1415,9 @@ RecordTransactionCommit(void)
 			}
 			
 			/* Clear the read xid list after having waited */
-			read_xid_list = (ReadXidList){0, {0}};
+			read_xid_list = (ReadXidList){0, false, {0}};
 		}
+		/* === END: Needs Ken's review === */
 		if (!wrote_xlog)
 			goto cleanup;
 	}
