@@ -3384,6 +3384,9 @@ bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn
                                                      HASH_ENTER,
                                                      &found);
 
+	// KMS: so a NULL entry indicates that the hash_search was unable to insert the new entry?
+	// KMS:  dynahash.c says you need to use HASH_ENTER_NULL instead of HASH_ENTER if that's the desired behavior
+	// KMS: Do we know whether the conditional code below ever actually executes during your tests?
     if (entry == NULL)
     {
 		non_durable_txn_htable->overflow_max_lsn = Max(non_durable_txn_htable->overflow_max_lsn, commit_lsn);
@@ -3439,6 +3442,8 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
     {
         if (entry->commit_lsn <= lsn)
         {
+			// KMS:  it would be nice if this log statement included the value of "lsn", so that you can confirm
+			// KMS:  from the log that the right entries are being pruned
             elog(LOG, "(walsender.c/prune) Prune Success: xid: %u, commit_lsn: %X/%X", 
                  entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
             
@@ -3453,6 +3458,10 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 	}
     
     LWLockRelease(NonDurableTxnHTableLock);
+	// KMS:  I would suggest logging some pruning stats at the end of each call to this function, so that you can
+	// KMS:     get a good view of the pruning behavior from the log
+	// KMS:   - what was the prune LSN, what was overflow_max_lsn,
+	// KMS:   - how many entries were in the table before pruning, how many were pruned, and was the overflow reset
 }
 /* === END: Needs Ken's review === */
 
