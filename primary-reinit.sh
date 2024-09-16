@@ -10,6 +10,6 @@ cp pg_hba.conf node-1/
 ./start node-1
 createuser -s postgres
 ./create.sh
-sed -i '' '/^#synchronous_standby_names/s/^#//' node-1/postgresql.conf
+sed -i '/^#synchronous_standby_names/s/^#//' node-1/postgresql.conf
 ./restart node-1
 

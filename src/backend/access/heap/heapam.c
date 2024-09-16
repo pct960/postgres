@@ -222,7 +222,7 @@ ReadXidList read_xid_list = {0, false, {0}};
 void
 insert_into_read_xid_list(TransactionId read_from_xid)
 {
-	elog(INFO, "(heapam.c/insert_into_read_xid_list) Inserting xid (%d) into read_xid_list", read_from_xid);
+	elog(DEBUG1, "(heapam.c/insert_into_read_xid_list) Inserting xid (%d) into read_xid_list", read_from_xid);
 	int i;
 
 	if (read_xid_list.n_xids >= MAX_READ_XID_TRACK_SIZE)

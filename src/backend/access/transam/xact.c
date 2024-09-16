@@ -1367,40 +1367,40 @@ RecordTransactionCommit(void)
 		/* === BEGIN: Needs Ken's review === */
 		if (!wrote_xlog && synchronous_commit > SYNCHRONOUS_COMMIT_OFF)
 		{
-			elog(INFO, "(xact.c)looking up read xid table");
+			elog(DEBUG1, "(xact.c)looking up read xid table");
 			dump_non_durable_txn_htable();
 
 			if (!read_xid_list.overflow)
 			{
-				elog(INFO, "(xact.c)read xid table size: %d", read_xid_list.n_xids);
+				elog(DEBUG1, "(xact.c)read xid table size: %d", read_xid_list.n_xids);
 				for (int i = 0; i < read_xid_list.n_xids; i++)
 				{
-					elog(INFO, "(xact.c)reading xid table entry %d: %u", i, read_xid_list.xids[i]);
+					elog(DEBUG1, "(xact.c)reading xid table entry %d: %u", i, read_xid_list.xids[i]);
 					read_xid_found = false;
 					read_commit_lsn = InvalidXLogRecPtr;
 					read_xid = read_xid_list.xids[i];
-					elog(INFO, "(xact.c)searching for xid (%u)", read_xid);
+					elog(DEBUG1, "(xact.c)searching for xid (%u)", read_xid);
 					read_commit_lsn = lookup_non_durable_txn(read_xid, &read_xid_found);
 
 					if (read_xid_found)
 					{
 						if (read_commit_lsn > maxLSN)
 						{
-							elog(INFO, "(xact.c)found xid. updated maxLSN to (%d)", read_commit_lsn);
+							elog(DEBUG1, "(xact.c)found xid. updated maxLSN to (%llu)", read_commit_lsn);
 							maxLSN = read_commit_lsn;
 						}
 					}
 					else if (non_durable_txn_htable->overflow_max_lsn != InvalidXLogRecPtr)
 					{
 						maxLSN = Max(maxLSN, non_durable_txn_htable->overflow_max_lsn);
-						elog(INFO, "(xact.c)xid (%u) not found in hash table", read_xid);
+						elog(DEBUG1, "(xact.c)xid (%u) not found in hash table", read_xid);
 					}
 				}
 			}
 			else if (non_durable_txn_htable->overflow_max_lsn != InvalidXLogRecPtr)
 			{
 				maxLSN = non_durable_txn_htable->overflow_max_lsn;
-				elog(INFO, "(xact.c)overflow maxLSN to (%d)", maxLSN);
+				elog(DEBUG1, "(xact.c)overflow maxLSN to (%llu)", maxLSN);
 			}
 			else
 				maxLSN = snapshot_lsn;

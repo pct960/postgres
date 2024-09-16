@@ -2171,9 +2171,9 @@ ProcessStandbyReplyMessage(void)
 	if (!am_cascading_walsender)
 		SyncRepReleaseWaiters();
 	
-	// /* Prune non durable hash table up to apply_ptr */
-	// if (applyPtr != InvalidXLogRecPtr)
-	// 	prune_non_durable_txn_hash_table(applyPtr);
+	/* Prune non durable hash table up to apply_ptr */
+	if (applyPtr != InvalidXLogRecPtr)
+		prune_non_durable_txn_hash_table(applyPtr);
 
 	/*
 	 * Advance our local xmin horizon when the client confirmed a flush.
@@ -3356,18 +3356,17 @@ void dump_non_durable_txn_htable(void)
 
     LWLockAcquire(NonDurableTxnHTableLock, LW_SHARED);
     
-    elog(INFO, "(walsender.c/dump) Dumping non-durable transaction hash table:");
+    elog(DEBUG1, "(walsender.c/dump) Dumping non-durable transaction hash table:");
     
     hash_seq_init(&status, non_durable_txn_htable->htab);
     
     while ((entry = (NonDurableTxnHTableEntry *) hash_seq_search(&status)) != NULL)
     {
-        elog(INFO, "(walsender.c/dump) XID: %u, Commit LSN: %X/%X", 
-             entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
+        elog(DEBUG1, "(walsender.c/dump) XID: %u, Commit LSN: %llu", entry->xid, entry->commit_lsn);
         count++;
     }
     
-    elog(INFO, "(walsender.c/dump) Total entries: %d", count);
+    elog(DEBUG1, "(walsender.c/dump) Total entries: %d", count);
     
     LWLockRelease(NonDurableTxnHTableLock);
 }
@@ -3381,14 +3380,16 @@ bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn
 
     entry = (NonDurableTxnHTableEntry *) hash_search(non_durable_txn_htable->htab,
                                                      &xid,
-                                                     HASH_ENTER,
+                                                     HASH_ENTER_NULL,
                                                      &found);
 
 	// KMS: so a NULL entry indicates that the hash_search was unable to insert the new entry?
 	// KMS:  dynahash.c says you need to use HASH_ENTER_NULL instead of HASH_ENTER if that's the desired behavior
 	// KMS: Do we know whether the conditional code below ever actually executes during your tests?
+	// Thanks, I've fixed this, and printed out a statement to see if it happens.
     if (entry == NULL)
     {
+		elog(LOG, "(walsender.c/insert) Insert Failed for xid: %u, Setting overflow_max_lsn to %llu", xid, commit_lsn);
 		non_durable_txn_htable->overflow_max_lsn = Max(non_durable_txn_htable->overflow_max_lsn, commit_lsn);
         LWLockRelease(NonDurableTxnHTableLock);
         return false;
@@ -3398,7 +3399,7 @@ bool insert_into_non_durable_txn_htable(TransactionId xid, XLogRecPtr commit_lsn
     entry->commit_lsn = commit_lsn;
 
     LWLockRelease(NonDurableTxnHTableLock);
-    elog(INFO, "(walsender.c/insert) Inserted: xid: %u, commit_lsn: %X/%X", xid, (uint32) (commit_lsn >> 32), (uint32) commit_lsn);
+    elog(DEBUG1, "(walsender.c/insert) Inserted: xid: %u, commit_lsn: %llu", xid, commit_lsn);
     return true;
 }
 
@@ -3418,11 +3419,11 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
     if (entry != NULL)
     {
         result = entry->commit_lsn;
-        elog(INFO, "(walsender.c/lookup) Found: xid: %u, commit_lsn: %X/%X", xid, (uint32) (result >> 32), (uint32) result);
+        elog(DEBUG1, "(walsender.c/lookup) Found: xid: %u, commit_lsn: %llu", xid, result);
     }
 	else
 	{
-		elog(INFO, "(walsender.c/lookup) Lookup: xid: %u not found", xid);
+		elog(DEBUG1, "(walsender.c/lookup) Lookup: xid: %u not found", xid);
 	}
 
     LWLockRelease(NonDurableTxnHTableLock);
@@ -3435,6 +3436,8 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
     NonDurableTxnHTableEntry *entry;
 
     LWLockAcquire(NonDurableTxnHTableLock, LW_EXCLUSIVE);
+
+	elog(LOG, "(walsender.c/prune) hash table size before pruning: %d, prune_lsn: %llu", hash_get_num_entries(non_durable_txn_htable->htab), lsn);
     
     hash_seq_init(&status, non_durable_txn_htable->htab);
 
@@ -3444,24 +3447,33 @@ static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
         {
 			// KMS:  it would be nice if this log statement included the value of "lsn", so that you can confirm
 			// KMS:  from the log that the right entries are being pruned
-            elog(LOG, "(walsender.c/prune) Prune Success: xid: %u, commit_lsn: %X/%X", 
-                 entry->xid, (uint32) (entry->commit_lsn >> 32), (uint32) entry->commit_lsn);
+			// Done:  I added the apply_ptr to the log message
+            elog(LOG, "(walsender.c/prune) Prune Success: xid: %u, commit_lsn: %llu", 
+                 entry->xid, entry->commit_lsn);
             
             if (hash_search(non_durable_txn_htable->htab, &entry->xid, HASH_REMOVE, NULL) == NULL)
                 elog(ERROR, "hash table corrupted");
         }
     }
 
+	if (non_durable_txn_htable->overflow_max_lsn != InvalidXLogRecPtr)
+	{
+		elog(LOG, "(walsender.c/prune) overflow_max_lsn: %llu", non_durable_txn_htable->overflow_max_lsn);
+	}
+
 	if (non_durable_txn_htable->overflow_max_lsn <= lsn)
 	{
 		non_durable_txn_htable->overflow_max_lsn = InvalidXLogRecPtr;
 	}
+
+	elog(LOG, "(walsender.c/prune) hash table size after pruning: %d", hash_get_num_entries(non_durable_txn_htable->htab));
     
     LWLockRelease(NonDurableTxnHTableLock);
 	// KMS:  I would suggest logging some pruning stats at the end of each call to this function, so that you can
 	// KMS:     get a good view of the pruning behavior from the log
 	// KMS:   - what was the prune LSN, what was overflow_max_lsn,
 	// KMS:   - how many entries were in the table before pruning, how many were pruned, and was the overflow reset
+	// Done
 }
 /* === END: Needs Ken's review === */
 
