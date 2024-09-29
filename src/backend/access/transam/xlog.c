@@ -2814,6 +2814,11 @@ XLogBackgroundFlush(void)
 	/* wake up walsenders now that we've released heavily contended locks */
 	WalSndWakeupProcessRequests();
 
+	/* We don't need to read the flush LSN from XLogCtl->LogWrtResult 
+	 * since we just updated it above.
+	 */
+	prune_non_durable_txn_hash_table(LogwrtResult.Flush);
+
 	/*
 	 * Great, done. To take some work off the critical path, try to initialize
 	 * as many of the no-longer-needed WAL buffers for future use as we can.

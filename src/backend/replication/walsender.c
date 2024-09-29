@@ -267,7 +267,6 @@ static void WalSndSegmentOpen(XLogReaderState *state, XLogSegNo nextSegNo,
 							  TimeLineID *tli_p);
 
 static uint32 hash_non_durable_txn_key(const void *key, Size keysize);
-static void prune_non_durable_txn_hash_table(XLogRecPtr lsn);
 
 /* Initialize walsender process before entering the main command loop */
 void
@@ -2171,9 +2170,13 @@ ProcessStandbyReplyMessage(void)
 	if (!am_cascading_walsender)
 		SyncRepReleaseWaiters();
 	
-	/* Prune non durable hash table up to apply_ptr */
-	if (applyPtr != InvalidXLogRecPtr)
-		prune_non_durable_txn_hash_table(applyPtr);
+	/* Prune non durable hash table up to flush_ptr 
+	 * We use flushPtr here because ED defines durability
+	 * as flushed to disk and not applied to shared buffers
+	 */
+
+	if (flushPtr != InvalidXLogRecPtr)
+		prune_non_durable_txn_hash_table(flushPtr);
 
 	/*
 	 * Advance our local xmin horizon when the client confirmed a flush.
@@ -3430,7 +3433,7 @@ lookup_non_durable_txn(TransactionId xid, bool *found)
     return result;
 }
 
-static void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
+void prune_non_durable_txn_hash_table(XLogRecPtr lsn)
 {
     HASH_SEQ_STATUS status;
     NonDurableTxnHTableEntry *entry;
