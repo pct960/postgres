@@ -84,6 +84,7 @@
 #include "replication/snapbuild.h"
 #include "replication/walreceiver.h"
 #include "replication/walsender.h"
+#include "replication/walsender_private.h"
 #include "storage/bufmgr.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
@@ -2816,8 +2817,13 @@ XLogBackgroundFlush(void)
 
 	/* We don't need to read the flush LSN from XLogCtl->LogWrtResult 
 	 * since we just updated it above.
+	 * Also, more importantly, we only need to prune the non-durable txn hash table
+	 * here if we *don't* have any sync standbys.  If we have sync standbys,
+	 * the walsender process will take care of the pruning.
 	 */
-	prune_non_durable_txn_hash_table(LogwrtResult.Flush);
+
+	if (!((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined)
+		prune_non_durable_txn_hash_table(LogwrtResult.Flush);
 
 	/*
 	 * Great, done. To take some work off the critical path, try to initialize
